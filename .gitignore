@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.openai/
+.netlify/
+.supabase/
+*.log
+*.zip
+*.pem
+*.key
+coverage/
+.DS_Store
+Thumbs.db

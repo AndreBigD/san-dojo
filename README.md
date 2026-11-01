@@ -1,7 +1,5 @@
 # San Dojo 🥋
 
-> **Estado da publicação:** a apresentação já está pública. O código completo está preparado e aguarda confirmação do responsável para publicação dos arquivos de autenticação, administração e estrutura do banco. As instruções de execução abaixo serão utilizáveis após essa publicação; por enquanto, acesse a demonstração online.
-
 Aplicativo web de aprendizagem de **karatê Shinkyokushin**, criado para o San Dojo. Combina atividades curtas, pronúncia japonesa e progressão para incentivar a prática com acompanhamento do sensei.
 
 **[Acessar o aplicativo](https://sandojokarate.netlify.app/)** · **[Guia de aprendizagem](https://sandojokarate.netlify.app/aprender.html)**

@@ -1,0 +1,11 @@
+{
+  "name": "san-dojo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplicativo web de aprendizagem de karatê Shinkyokushin",
+  "scripts": {
+    "start": "node scripts/serve.cjs",
+    "test": "node --test test-course.cjs test-progression.cjs test-training.cjs test-streaks.cjs"
+  },
+  "engines": { "node": ">=20" }
+}
