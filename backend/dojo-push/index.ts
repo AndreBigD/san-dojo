@@ -1,18 +1,19 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import * as webpush from 'jsr:@negrel/webpush@0.5.0';
-const origin='https://sandojokarate.netlify.app';
-const cors={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS','Vary':'Origin'};
+const origins=new Set(['https://sandojokarate.netlify.app','https://sandojokarate.com.br','https://www.sandojokarate.com.br']);
 const url=Deno.env.get('SUPABASE_URL');
 const service=createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),{auth:{persistSession:false,autoRefreshToken:false}});
 const check=r=>{if(r.error)throw new Error('Operação indisponível');return r.data;};
-const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
 const allowed=e=>{try{const u=new URL(e);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&!u.hash&&/^(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|([a-z0-9-]+\.)*push\.apple\.com|([a-z0-9-]+\.)*notify\.windows\.com)$/.test(u.hostname);}catch{return false;}};
 const b64=bytes=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 async function getKeys(create=false){let stored=check(await service.rpc('dojo_push_get_keys'));if(!stored&&create){const keys=await webpush.generateVapidKeys({extractable:true});stored=check(await service.rpc('dojo_push_init_keys',{p_keys:await webpush.exportVapidKeys(keys),p_public:await webpush.exportApplicationServerKey(keys)}));}return stored;}
 Deno.serve(async req=>{
+ const requestOrigin=req.headers.get('origin')||'';
+ const cors={'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS','Vary':'Origin',...(origins.has(requestOrigin)?{'Access-Control-Allow-Origin':requestOrigin}:{})};
+ const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
+ if(requestOrigin&&!origins.has(requestOrigin))return json({error:'Origem não permitida'},403);
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});
  if(req.method!=='POST')return json({error:'Método não permitido'},405);
- if(req.headers.get('origin')&&req.headers.get('origin')!==origin)return json({error:'Origem não permitida'},403);
  try{
   if(Number(req.headers.get('content-length')||0)>4096)return json({error:'Pedido inválido'},400);
   const body=await req.json();
