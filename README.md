@@ -15,7 +15,7 @@ O San Dojo aproxima o estudo do karatê da rotina dos alunos: apresenta conceito
 - **32 módulos e 102 fases**, com dificuldade progressiva e trilhas de Kihon e Idogeiko para 13 graduações ilustrativas.
 - Dificuldade que cresce a cada faixa: reconhecimento inicial, escrita sem alternativas a partir da laranja, nove termos auditivos e oito transições de lado na preta.
 - Exercícios de vocabulário, posições, técnicas e princípios do dojo.
-- Mascote com reações animadas, pistas acolhedoras nos erros e celebração ao concluir fases, respeitando a preferência por movimento reduzido.
+- Mascote com três poses e expressões próprias (aprovação, reflexão e comemoração), pistas acolhedoras nos erros e celebração ao concluir fases, respeitando a preferência por movimento reduzido.
 - Catálogo de **23 katas** e **32 técnicas de Kihon**, organizado por Te waza, Ashi waza, Shuto waza e Uke waza.
 - Áudios de pronúncia japonesa, contagem e sete juramentos em português e japonês.
 - XP semanal e avanço automático por notas e estudo, sem aprovação manual.

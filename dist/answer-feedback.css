@@ -3,8 +3,8 @@
 #feedback.mascot-feedback{display:flex;align-items:center;gap:18px;position:relative;background:#fff;border:2px solid #191919;border-bottom-width:5px;padding:17px 20px;margin:0 10px 20px;border-radius:20px;color:#202020;animation:reaction-enter .28s ease-out}
 #feedback.mascot-feedback.retry{background:#fff7f7;border-color:#d8222c;color:#282828}
 .reaction-scene{position:relative;flex:0 0 94px;align-self:center}
-.reaction-portrait{display:block;position:relative;width:94px;height:110px;overflow:hidden;border-radius:48px 48px 20px 20px;background:#fff;isolation:isolate}
-.reaction-portrait img{position:absolute;width:130px;max-width:none;height:auto;left:50%;top:0;transform:translateX(-50%);user-select:none}
+.reaction-portrait{display:block;position:relative;width:94px;height:110px;overflow:visible;background:transparent;isolation:isolate}
+.reaction-portrait img{display:block;width:100%;height:100%;object-fit:contain;user-select:none}
 .correct .reaction-scene{animation:mascot-cheer .7s ease-out}
 .retry .reaction-scene{animation:mascot-nod .65s ease-in-out}
 .reaction-mark{position:absolute;right:-5px;bottom:0;display:grid;place-items:center;width:29px;height:29px;border-radius:50%;color:#fff;background:#191919;border:3px solid #fff;font-size:15px;font-weight:900}
@@ -21,8 +21,8 @@
 #lesson[data-reaction=correct] .option.selected{border-color:#191919;background:#f4f4f4;color:#191919;animation:answer-pop .3s ease-out}
 #lesson[data-reaction=retry] .written-answer{border-color:#d8222c}
 .mascot-finish{position:relative;width:210px;margin:0 auto 25px;display:flex;flex-direction:column;align-items:center}
-.mascot-finish .reaction-portrait{width:145px;height:158px;border-radius:80px 80px 25px 25px;border-bottom:4px solid #191919}
-.mascot-finish .reaction-portrait img{width:185px}
+.mascot-finish .reaction-portrait{width:178px;height:178px}
+.mascot-finish .reaction-portrait img{width:100%;height:100%}
 .mascot-finish.celebrate .reaction-portrait{animation:mascot-cheer .8s ease-out}
 .mascot-finish.encourage .reaction-portrait{animation:mascot-nod .65s ease-in-out}
 .mascot-finish .reaction-sparkles{inset:0 10px 40px}
@@ -33,5 +33,5 @@
 @keyframes mascot-nod{0%,100%{transform:rotate(0)}40%{transform:rotate(-5deg)}75%{transform:rotate(3deg)}}
 @keyframes answer-pop{50%{transform:scale(1.015)}}
 @keyframes dojo-spark{0%{opacity:0;transform:rotate(var(--angle)) translateY(-20px) scale(.4)}25%{opacity:1}100%{opacity:0;transform:rotate(var(--angle)) translateY(-85px) scale(.7)}}
-@media(max-width:640px){#feedback.mascot-feedback{gap:12px;padding:14px 12px;margin:0 3px 16px}.reaction-scene{flex-basis:68px}.reaction-portrait{width:68px;height:88px;border-radius:35px 35px 15px 15px}.reaction-portrait img{width:101px}.reaction-message h3{font-size:16px}.reaction-kicker{font-size:7px;letter-spacing:.5px}#feedback .reaction-message p{font-size:11px}.reaction-mark{width:25px;height:25px;font-size:13px;right:-3px}.reaction-combo{font-size:9px}.reaction-sparkles i{font-size:12px}}
+@media(max-width:640px){#feedback.mascot-feedback{gap:12px;padding:14px 12px;margin:0 3px 16px}.reaction-scene{flex-basis:78px}.reaction-portrait{width:78px;height:96px}.reaction-portrait img{width:100%}.reaction-message h3{font-size:16px}.reaction-kicker{font-size:7px;letter-spacing:.5px}#feedback .reaction-message p{font-size:11px}.reaction-mark{width:25px;height:25px;font-size:13px;right:-3px}.reaction-combo{font-size:9px}.reaction-sparkles i{font-size:12px}}
 @media(prefers-reduced-motion:reduce){#feedback.mascot-feedback,.reaction-scene,.mascot-finish .reaction-portrait,#lesson[data-reaction] .option.selected{animation:none!important}.reaction-sparkles{display:none}}
