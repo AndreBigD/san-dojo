@@ -31,7 +31,9 @@ Deno.serve(async req=>{
    if(!target)return json({error:'Ative neste aparelho e aguarde um minuto entre testes.'},429);
    const app=await webpush.ApplicationServer.new({contactInformation:'mailto:personalandrecordeiro@gmail.com',vapidKeys:await webpush.importVapidKeys(stored.keys,{extractable:false})});
    try{
-    await app.subscribe({endpoint:target.endpoint,keys:{p256dh:target.p256dh,auth:target.auth_key}}).pushTextMessage(JSON.stringify({title:'Seu momento no San Dojo',body:'Que tal concluir uma atividade hoje? Aprenda no seu ritmo.',url:'/#sequence'}),{ttl:120,urgency:webpush.Urgency.Normal,topic:'san-dojo-test'});
+    // Topic é opcional; a Apple rejeitou o identificador anterior com BadWebPushTopic.
+    // O service worker já agrupa os avisos exibidos pela tag san-dojo-daily.
+    await app.subscribe({endpoint:target.endpoint,keys:{p256dh:target.p256dh,auth:target.auth_key}}).pushTextMessage(JSON.stringify({title:'Seu momento no San Dojo',body:'Que tal concluir uma atividade hoje? Aprenda no seu ritmo.',url:'/#sequence'}),{ttl:120,urgency:webpush.Urgency.High});
    }catch(error){
     let reason='';try{const detail=await error?.response?.clone().json();if(typeof detail?.reason==='string'&&/^[A-Za-z_-]{1,60}$/.test(detail.reason))reason=detail.reason;}catch{}
     const safeMessage=String(error?.message||'').replace(/https?:\/\/\S+/g,'[URL]').replace(/[A-Za-z0-9_\-+/=]{22,}/g,'[valor]').slice(0,180);
@@ -60,7 +62,7 @@ Deno.serve(async req=>{
   const rows=check(await service.rpc('dojo_push_take_batch'));let sent=0,failed=0,removed=0;
   for(let i=0;i<rows.length;i+=10)await Promise.all(rows.slice(i,i+10).map(async row=>{
    let gone=!allowed(row.endpoint),ok=false;
-   try{if(!gone){await app.subscribe({endpoint:row.endpoint,keys:{p256dh:row.p256dh,auth:row.auth_key}}).pushTextMessage(JSON.stringify({title:'Seu momento no San Dojo',body:'Que tal concluir uma atividade hoje? Aprenda no seu ritmo.',url:'/#sequence'}),{ttl:1800,urgency:webpush.Urgency.Normal,topic:'san-dojo-daily'});ok=true;sent++;}}
+   try{if(!gone){await app.subscribe({endpoint:row.endpoint,keys:{p256dh:row.p256dh,auth:row.auth_key}}).pushTextMessage(JSON.stringify({title:'Seu momento no San Dojo',body:'Que tal concluir uma atividade hoje? Aprenda no seu ritmo.',url:'/#sequence'}),{ttl:1800,urgency:webpush.Urgency.Normal});ok=true;sent++;}}
    catch(error){gone=error?.response?.status===404||error?.response?.status===410;failed++;}
    if(gone)removed++;check(await service.rpc('dojo_push_result',{p_id:row.id,p_gone:gone,p_sent:ok}));
   }));
