@@ -11,18 +11,18 @@ test('a failed phase keeps the next phase locked and a genuine passing score rel
  C.record(p,'dojo-1',2,4,['s1','s2']);assert.equal(C.phaseUnlocked(p,'dojo-2'),false);
  const result=C.record(p,'dojo-1',3,4,['s1']);assert.equal(result.passed,true);assert.equal(C.phaseUnlocked(p,'dojo-2'),true);assert.equal(p.phases['dojo-1'].attempts,2);
 });
-test('the next module requires all prior phases; movement modules also require a sensei check',()=>{
+test('the next module unlocks automatically after all prior phases pass',()=>{
  const p=C.initial();assert.throws(()=>C.record(p,'bases-1',4,4,[]),/bloqueada/);
  for(const phase of C.COURSE[0].phases)C.record(p,phase.id,phase.questionIds.length,phase.questionIds.length,[]);
- assert.equal(C.moduleUnlocked(p,'bases'),true);assert.throws(()=>C.approve(p,'bases'),/primeiro/);
+ assert.equal(C.moduleUnlocked(p,'bases'),true);
  for(const phase of C.COURSE[1].phases)C.record(p,phase.id,phase.questionIds.length,phase.questionIds.length,[]);
- assert.equal(C.moduleUnlocked(p,'kihon'),false);C.approve(p,'bases','Postura observada');assert.equal(C.moduleUnlocked(p,'kihon'),true);
+ assert.equal(C.moduleUnlocked(p,'kihon'),true);assert.deepEqual(p.approvals,{});
 });
 test('a weaker later review does not erase an earlier approval or best score',()=>{
  const p=C.initial();C.record(p,'dojo-1',4,4,[]);const result=C.record(p,'dojo-1',1,4,['s1','s2','s3']);
  assert.equal(result.passed,false);assert.equal(p.phases['dojo-1'].passed,true);assert.equal(p.phases['dojo-1'].best,100);
 });
-test('complete learning path preserves all physical gates and finishes after 24 phases',()=>{
+test('complete learning path advances without manual approvals and finishes after 24 phases',()=>{
  const p=C.initial();for(const m of C.COURSE){assert.equal(C.moduleUnlocked(p,m.id),true);for(const phase of m.phases)C.record(p,phase.id,phase.questionIds.length,phase.questionIds.length,[]);if(m.requiresSensei){assert.equal(C.moduleComplete(p,m.id),false);C.approve(p,m.id,'Prática observada');}assert.equal(C.moduleComplete(p,m.id),true);}assert.equal(C.nextPhase(p),null);
 });
 test('romaji matching accepts accents and spacing but does not accept unrelated words',()=>{

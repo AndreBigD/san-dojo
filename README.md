@@ -2,7 +2,7 @@
 
 Aplicativo web de aprendizagem de **karatê Shinkyokushin**, criado para o San Dojo. Combina atividades curtas, pronúncia japonesa e progressão para incentivar a prática com acompanhamento do sensei.
 
-**[Acessar o aplicativo](https://sandojokarate.netlify.app/)** · **[Guia de aprendizagem](https://sandojokarate.netlify.app/aprender.html)**
+**[Acessar o aplicativo](https://sandojokarate.com.br/)** · **[Guia de aprendizagem](https://sandojokarate.com.br/aprender.html)**
 
 ![Apresentação do San Dojo](docs/san-dojo.png)
 
@@ -13,14 +13,18 @@ O San Dojo aproxima o estudo do karatê da rotina dos alunos: apresenta conceito
 ## Funcionalidades
 
 - **32 módulos e 102 fases**, com dificuldade progressiva e trilhas de Kihon e Idogeiko para 13 graduações ilustrativas.
+- Dificuldade que cresce a cada faixa: reconhecimento inicial, escrita sem alternativas a partir da laranja, nove termos auditivos e oito transições de lado na preta.
 - Exercícios de vocabulário, posições, técnicas e princípios do dojo.
 - Catálogo de **23 katas** e **32 técnicas de Kihon**, organizado por Te waza, Ashi waza, Shuto waza e Uke waza.
 - Áudios de pronúncia japonesa, contagem e sete juramentos em português e japonês.
-- XP semanal, requisitos de estudo e confirmação de práticas pelo sensei.
+- XP semanal e avanço automático por notas e estudo, sem aprovação manual.
+- 25 energias: 5 por atividade e recarga de 5 a cada 30 minutos.
 - Sequência diária, calendário de atividades e marcos de constância.
 - Login Google via Supabase, progresso por conta e painel administrativo de materiais.
 - Controles de responsáveis e separação de permissões entre aluno e administrador.
 - Interface responsiva com identidade visual própria e uso pela Tela de Início do iPhone.
+
+O fluxo opcional de +5 energias após um anúncio recompensado está preparado e desativado; depende de aprovação do AdSense e habilitação separada do H5 Games Ads. O acesso exige login e declaração do responsável, com liberação automática. Somente o administrador na faixa preta tem acesso de revisão a todas as fases, sem inventar conclusões.
 
 Os lembretes Web Push estão implementados e em validação de entrega em aparelhos reais. O acesso Apple e a publicidade estão desativados nesta versão. Os vídeos próprios de demonstração serão adicionados posteriormente.
 
@@ -54,7 +58,7 @@ Abra **http://localhost:4173**. Sem configuração do Supabase, o aplicativo fun
 npm test
 ```
 
-Os testes verificam progressão semanal, bloqueio e liberação de fases, requisitos de prática, referências de áudio e contagem de dias.
+Os testes verificam progressão semanal, bloqueio e liberação de fases, energia, avanço automático, anúncios recompensados simulados em testes, referências de áudio e contagem de dias.
 
 ## Organização
 

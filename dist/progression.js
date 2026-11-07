@@ -4,7 +4,7 @@
   else root.DojoGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const RULES = Object.freeze({ promoteXP: 200, maintainXP: 80, unlimitedEnergy: true, maxEnergy: 5, refillMs: 30 * 60 * 1000, lessonXP: 20, timezone: 'America/Sao_Paulo' });
+  const RULES = Object.freeze({ promoteXP: 200, maintainXP: 80, unlimitedEnergy: false, maxEnergy: 25, activityEnergy: 5, refillEnergy: 5, rewardEnergy: 5, energyVersion: 2, refillMs: 30 * 60 * 1000, lessonXP: 20, timezone: 'America/Sao_Paulo' });
   const BELTS = Object.freeze([
     { name: 'Branca', color: '#f9f8ef', stripe: null },
     { name: 'Branca com risco laranja', color: '#f9f8ef', stripe: '#f18135' },
@@ -36,9 +36,9 @@
     return shiftDay(day, -((weekday + 6) % 7));
   }
   function create(now = Date.now()) {
-    return { version: 1, currentWeek: weekKey(now), belt: 0, highestBelt: 0, weeks: {}, history: [], energy: { count: RULES.maxEnergy, at: now }, premiumDemoUntil: 0 };
+    return { version: 1, currentWeek: weekKey(now), belt: 0, highestBelt: 0, weeks: {}, history: [], energy: { version: RULES.energyVersion, count: RULES.maxEnergy, at: now }, premiumDemoUntil: 0 };
   }
-  function unlimited(game, now = Date.now()) { return RULES.unlimitedEnergy || premium(game, now); }
+  function unlimited(game, now = Date.now()) { return RULES.unlimitedEnergy; }
   function premium(game, now = Date.now()) { return Number(game.premiumDemoUntil) > now; }
   function current(game) { return game.weeks[game.currentWeek] || { xp: 0, days: [] }; }
   function outcome(belt, xp, eligible = true) {
@@ -66,14 +66,15 @@
   }
   function refill(game, now = Date.now()) {
     const energy = game.energy;
+    if(energy.version!==RULES.energyVersion){energy.version=RULES.energyVersion;energy.count=RULES.maxEnergy;energy.at=now;game.premiumDemoUntil=0;}
     if (RULES.unlimitedEnergy) { energy.count = RULES.maxEnergy; energy.at = now; return energy.count; }
-    energy.count = Math.max(0, Math.min(RULES.maxEnergy, Math.floor(energy.count)));
+    energy.count = Math.max(0, Math.min(RULES.maxEnergy, Math.floor(Number.isFinite(energy.count)?energy.count:0)));
     // A device clock moved backwards must not grant charges or stall recovery.
     if (!Number.isFinite(energy.at) || energy.at > now) energy.at = now;
     if (energy.count >= RULES.maxEnergy) { energy.at = now; return energy.count; }
     const recovered = Math.floor((now - energy.at) / RULES.refillMs);
     if (recovered > 0) {
-      energy.count = Math.min(RULES.maxEnergy, energy.count + recovered);
+      energy.count = Math.min(RULES.maxEnergy, energy.count + recovered * RULES.refillEnergy);
       energy.at = energy.count === RULES.maxEnergy ? now : energy.at + recovered * RULES.refillMs;
     }
     return energy.count;
@@ -85,16 +86,17 @@
   function reserve(game, now = Date.now()) {
     reconcile(game, now);
     if (unlimited(game, now)) return { allowed: true, charged: false };
-    if (game.energy.count === 0) return { allowed: false, charged: false };
+    if (game.energy.count < RULES.activityEnergy) return { allowed: false, charged: false };
     if (game.energy.count === RULES.maxEnergy) game.energy.at = now;
-    game.energy.count--;
+    game.energy.count -= RULES.activityEnergy;
     return { allowed: true, charged: true };
   }
   function refund(game, now = Date.now()) {
     refill(game, now);
-    game.energy.count = Math.min(RULES.maxEnergy, game.energy.count + 1);
+    game.energy.count = Math.min(RULES.maxEnergy, game.energy.count + RULES.activityEnergy);
     if (game.energy.count === RULES.maxEnergy) game.energy.at = now;
   }
+  function rewardEnergy(game, now = Date.now()) {refill(game,now);const before=game.energy.count;game.energy.count=Math.min(RULES.maxEnergy,before+RULES.rewardEnergy);if(game.energy.count===RULES.maxEnergy)game.energy.at=now;return game.energy.count-before;}
   function credit(game, xp, now = Date.now()) {
     reconcile(game, now);
     if (!Number.isFinite(xp) || xp < 0) throw new Error('Invalid XP');
@@ -104,5 +106,5 @@
     if (xp > 0 && !entry.days.includes(day)) entry.days.push(day);
     return entry;
   }
-  return { RULES, BELTS, create, dayKey, weekKey, shiftDay, premium, unlimited, current, outcome, reconcile, refill, nextChargeMs, reserve, refund, credit };
+  return { RULES, BELTS, create, dayKey, weekKey, shiftDay, premium, unlimited, current, outcome, reconcile, refill, nextChargeMs, reserve, refund, rewardEnergy, credit };
 });
