@@ -1,0 +1,37 @@
+/* Reações curtas, sem flashes ou movimentos contínuos. */
+#lesson .lesson-bottom{position:sticky;bottom:0;z-index:3;background:#fffdf9;box-shadow:0 -12px 12px #fffdf9;padding-top:15px;padding-bottom:8px}
+#feedback.mascot-feedback{display:flex;align-items:center;gap:18px;position:relative;background:#fff;border:2px solid #191919;border-bottom-width:5px;padding:17px 20px;margin:0 10px 20px;border-radius:20px;color:#202020;animation:reaction-enter .28s ease-out}
+#feedback.mascot-feedback.retry{background:#fff7f7;border-color:#d8222c;color:#282828}
+.reaction-scene{position:relative;flex:0 0 94px;align-self:center}
+.reaction-portrait{display:block;position:relative;width:94px;height:110px;overflow:hidden;border-radius:48px 48px 20px 20px;background:#fff;isolation:isolate}
+.reaction-portrait img{position:absolute;width:130px;max-width:none;height:auto;left:50%;top:0;transform:translateX(-50%);user-select:none}
+.correct .reaction-scene{animation:mascot-cheer .7s ease-out}
+.retry .reaction-scene{animation:mascot-nod .65s ease-in-out}
+.reaction-mark{position:absolute;right:-5px;bottom:0;display:grid;place-items:center;width:29px;height:29px;border-radius:50%;color:#fff;background:#191919;border:3px solid #fff;font-size:15px;font-weight:900}
+.retry .reaction-mark{background:#d8222c}
+.reaction-message{min-width:0;position:relative;z-index:1}
+.reaction-kicker{font-size:8px;letter-spacing:1.1px;font-weight:800;color:#b9212b}
+.reaction-message h3{font-size:19px;line-height:1.25;margin:5px 0 7px;font-weight:900;color:#191919}
+#feedback .reaction-message p{font-size:12px;line-height:1.65;margin:0;color:#414141}
+.reaction-message small{display:block;font-size:10px;line-height:1.6;margin-top:8px;color:#666}
+.reaction-combo{display:inline-block;margin-top:9px;padding:5px 9px;background:#191919;color:#fff;border-radius:8px;font-size:10px;font-weight:800}
+.reaction-sparkles{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.reaction-sparkles i{font-style:normal;position:absolute;left:50%;top:40%;color:#d8222c;font-size:15px;opacity:0;animation:dojo-spark .9s ease-out both;animation-delay:calc(var(--piece)*.035s);--angle:calc(var(--piece)*51deg)}
+.reaction-sparkles i:nth-child(even){color:#191919;font-size:11px}
+#lesson[data-reaction=correct] .option.selected{border-color:#191919;background:#f4f4f4;color:#191919;animation:answer-pop .3s ease-out}
+#lesson[data-reaction=retry] .written-answer{border-color:#d8222c}
+.mascot-finish{position:relative;width:210px;margin:0 auto 25px;display:flex;flex-direction:column;align-items:center}
+.mascot-finish .reaction-portrait{width:145px;height:158px;border-radius:80px 80px 25px 25px;border-bottom:4px solid #191919}
+.mascot-finish .reaction-portrait img{width:185px}
+.mascot-finish.celebrate .reaction-portrait{animation:mascot-cheer .8s ease-out}
+.mascot-finish.encourage .reaction-portrait{animation:mascot-nod .65s ease-in-out}
+.mascot-finish .reaction-sparkles{inset:0 10px 40px}
+.finish-speech{position:relative;margin-top:8px;border-radius:12px;background:#191919;color:#fff;font-size:11px;font-weight:800;padding:10px 13px;line-height:1.5}
+.finish-speech:before{content:'';position:absolute;top:-6px;left:50%;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:7px solid #191919}
+@keyframes reaction-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes mascot-cheer{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-10px) rotate(-5deg)}65%{transform:translateY(-3px) rotate(4deg)}}
+@keyframes mascot-nod{0%,100%{transform:rotate(0)}40%{transform:rotate(-5deg)}75%{transform:rotate(3deg)}}
+@keyframes answer-pop{50%{transform:scale(1.015)}}
+@keyframes dojo-spark{0%{opacity:0;transform:rotate(var(--angle)) translateY(-20px) scale(.4)}25%{opacity:1}100%{opacity:0;transform:rotate(var(--angle)) translateY(-85px) scale(.7)}}
+@media(max-width:640px){#feedback.mascot-feedback{gap:12px;padding:14px 12px;margin:0 3px 16px}.reaction-scene{flex-basis:68px}.reaction-portrait{width:68px;height:88px;border-radius:35px 35px 15px 15px}.reaction-portrait img{width:101px}.reaction-message h3{font-size:16px}.reaction-kicker{font-size:7px;letter-spacing:.5px}#feedback .reaction-message p{font-size:11px}.reaction-mark{width:25px;height:25px;font-size:13px;right:-3px}.reaction-combo{font-size:9px}.reaction-sparkles i{font-size:12px}}
+@media(prefers-reduced-motion:reduce){#feedback.mascot-feedback,.reaction-scene,.mascot-finish .reaction-portrait,#lesson[data-reaction] .option.selected{animation:none!important}.reaction-sparkles{display:none}}
