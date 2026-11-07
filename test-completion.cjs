@@ -32,3 +32,14 @@ test('a student cannot complete an unopened later phase through the administrato
 test('Ver resultado concludes a below-threshold attempt with review guidance and without awarding XP',()=>{
  const f=fixture({admin:false,rank:0,id:'treino-kihon-0-1',correct:false});f.run('answer()');assert.equal(f.run('active.finished'),true);assert.equal(f.run('state.xp'),0);assert.equal(f.saved.length,1);assert.equal(f.run('state.learning.phases[active.phase.id].passed'),false);assert.equal(f.run('state.sessions[dayKey()]'),1);assert.equal(f.run('state.game.energy.count'),20);assert.match(f.node('#lesson-content').innerHTML,/É HORA DE REVISAR/);assert.match(f.node('#answer').innerHTML,/Voltar ao módulo/);
 });
+test('a regular student completes an available phase, restores progress and unlocks only the next phase',()=>{
+ const f=fixture({admin:false,rank:0,id:'treino-kihon-0-1'});f.run('answer()');
+ assert.equal(f.run('state.xp'),20);assert.equal(f.run("C.phaseUnlocked(state.learning,'treino-kihon-0-2')"),true);
+ assert.equal(f.run("C.phaseUnlocked(state.learning,'treino-kihon-0-3')"),false);assert.equal(f.run("C.phaseUnlocked(state.learning,'treino-kihon-1-1')"),false);
+ const restored=fixture({admin:false,rank:0,id:'treino-kihon-0-1'});restored.run('state='+JSON.stringify(f.saved[0]));
+ assert.equal(restored.run("state.learning.phases['treino-kihon-0-1'].best"),100);assert.equal(restored.run('state.xp'),20);
+ assert.equal(restored.run('state.game.energy.count'),20);assert.equal(restored.run("C.phaseUnlocked(state.learning,'treino-kihon-0-2')"),true);
+ // Uma revisão no mesmo dia usa energia sem duplicar o XP da fase já aprovada.
+ restored.run('G.reserve(state.game);state.game.pendingEnergy=true;answer()');
+ assert.equal(restored.run('state.xp'),20);assert.equal(restored.run('state.game.energy.count'),15);assert.equal(restored.run("state.learning.phases['treino-kihon-0-1'].attempts"),2);assert.equal(restored.saved.length,1);
+});
