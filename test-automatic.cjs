@@ -9,6 +9,7 @@ test('only an authenticated administrator at black belt can review locked phases
   assert.equal(vm.runInContext("C.phaseUnlocked(state.learning,'integracao-4')",context),expected);
   assert.equal(vm.runInContext('Object.keys(state.learning.phases).length',context),0);
  }
+ C.setReviewAccess(null);
 });
 test('all six study phases plus weekly XP promote without a fabricated physical approval',()=>{
  const start=Date.parse('2026-11-02T03:00:00Z'),p=C.initial(),g=G.create(start);p.availableBelt=0;T.syncMastery(p,g);G.credit(g,200,start);
