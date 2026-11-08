@@ -4,6 +4,8 @@ Aplicativo web de aprendizagem de **karatê Shinkyokushin**, criado para o San D
 
 **[Acessar o aplicativo](https://sandojokarate.com.br/)** · **[Guia de aprendizagem](https://sandojokarate.com.br/aprender.html)**
 
+**Próxima atualização:** atividades de associação e desafios em cartões estão implementados neste repositório, com 49 testes aprovados, e aguardam publicação. [Detalhes e validação](docs/ATIVIDADES-INTERATIVAS.md).
+
 ![Apresentação do San Dojo](docs/san-dojo.png)
 
 ## O projeto

@@ -125,7 +125,8 @@ function advancedQuestions(rank,type,stage){
   const group=K.groups[(rank+stage+v)%4],start=(rank+stage+v)%group.terms.length;
   const set=Array.from({length:Math.min(d.terms,group.terms.length)},(_,j)=>group.terms[(start+j)%group.terms.length]);
   const prompt=set.map((t,i)=>`${i+1}) ${t.meaning}`).join('; '),names=set.map(t=>t.name);
-  if(d.choices&&stage===0){const correct=names[0],near=group.terms.filter(t=>t.name!==correct).slice(start%2,start%2+3).map(t=>t.name);ids.push(choice(prefix+'nome-'+v,`Qual nome corresponde a: ${set[0].meaning.toLowerCase()}?`,[correct,...near],0,`${correct}: ${set[0].meaning}.`));}
+  if(rank<2&&v===0){const pairs=Array.from({length:3+Math.min(1,rank+stage)},(_,j)=>group.terms[(start+j)%group.terms.length]);ids.push(add({id:prefix+'nome-'+v,type:'match',prompt:'Ligue os nomes aos significados.',pairs:pairs.map(t=>({name:t.name,meaning:t.meaning})),why:pairs.map(t=>t.name+' = '+t.meaning.toLowerCase()).join('; ')+'.'}));}
+  else if(d.choices&&stage===0){const correct=names[0],near=group.terms.filter(t=>t.name!==correct).slice(start%2,start%2+3).map(t=>t.name);ids.push(choice(prefix+'nome-'+v,`Qual nome corresponde a: ${set[0].meaning.toLowerCase()}?`,[correct,...near],0,`${correct}: ${set[0].meaning}.`));}
   else emit('nome-'+v,`Sem alternativas, escreva os nomes completos, nesta ordem: ${prompt}.`,names.join(' '),`Na ordem: ${names.join(' → ')}.`);
  }
  const sequence=Array.from({length:d.sequence},(_,j)=>K.terms[(rank*2+stage*3+j*5+(isK?0:9))%K.terms.length].name);

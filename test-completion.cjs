@@ -4,7 +4,7 @@ function fixture({admin=true,rank=12,id='treino-kihon-12-3',correct=true}={}){
  const nodes=new Map(),saved=[],messages=[],calls={close:0,push:0};
  const node=id=>{if(!nodes.has(id))nodes.set(id,{style:{},innerHTML:'',textContent:'',className:'',disabled:false,scrollTop:100,replaceChildren(){this.innerHTML='';},removeAttribute(){},close(){calls.close++;}});return nodes.get(id);};
  const context=vm.createContext({document:{querySelector:node,getElementById:id=>node('#'+id),querySelectorAll:()=>[]},Intl,Date,console,localStorage:{setItem:(key,value)=>saved.push(JSON.parse(value))},DojoAccounts:{canManage:()=>admin,queueProgress:()=>{}},DojoPush:{practiced:()=>calls.push++},DojoFeedback:{success:()=>{}},stopAudio(){},stats(){},toast:message=>messages.push(message),go:path=>calls.path=path});
- for(const file of ['curriculum.js','progression.js','kihon-catalog.js','training.js','answer-feedback.js'])vm.runInContext(fs.readFileSync('./dist/'+file,'utf8'),context);
+ for(const file of ['curriculum.js','progression.js','kihon-catalog.js','training.js','answer-feedback.js','interactive-activities.js'])vm.runInContext(fs.readFileSync('./dist/'+file,'utf8'),context);
  vm.runInContext('const G=DojoGame,T=DojoTraining;',context);
  vm.runInContext(source.split('try{const saved=')[0],context);
  // Usa as funções reais ligadas ao botão e ao salvamento, com elementos de tela isolados.
