@@ -47,5 +47,39 @@ test('all 23 katas, 32 Kihon techniques, group sequences and training commands h
  assert.equal(ctx.katas.length,23);assert.equal(K.terms.length,32);assert.deepEqual(K.groups.map(g=>g.name),['Te waza','Ashi waza','Shuto waza','Uke waza']);
  const names=[...ctx.katas.map(k=>k.name),...K.terms.map(t=>t.name),...K.groups.flatMap(g=>[g.name,'Sequência · '+g.name]),...T.COMMANDS.map((_,i)=>'Comandos da faixa '+String(i+1).padStart(2,'0'))];
  for(const name of names){assert.ok(ctx.registry[name],name);assert.ok(fs.statSync('./dist/'+ctx.registry[name].src).size>500,name);}
- for(const m of T.MODULES)for(const p of m.phases)for(const id of p.questionIds)for(const name of C.QUESTIONS[id].audioSequence||[])assert.ok(ctx.registry[name],id+': '+name);
+ for(const m of T.MODULES)for(const p of m.phases)for(const ids of p.questionSets||[p.questionIds])for(const id of ids)for(const name of C.QUESTIONS[id].audioSequence||[])assert.ok(ctx.registry[name],id+': '+name);
+});
+
+test('San Dojo leg directions and complete mawashi names follow the sensei correction',()=>{
+ assert.equal(K.terms.find(t=>t.name==='Uchi mawashi').meaning,'Movimento circular da perna de dentro para fora');
+ assert.equal(K.terms.find(t=>t.name==='Soto mawashi').meaning,'Movimento circular da perna de fora para dentro');
+ const phase=T.modulesForBelt(12).find(m=>m.type==='kihon').phases[0];
+ const q=phase.questionIds.map(id=>C.QUESTIONS[id]).find(q=>q.skill==='contraste');
+ const canonical=q.answers[0];assert.match(canonical,/Uchi mawashi/);assert.match(canonical,/Soto mawashi/);
+ const full=canonical.replace('Uchi mawashi','Uchi mawashi geri').replace('Soto mawashi','Soto mawashi geri');
+ assert.ok(q.answers.some(a=>C.normalize(a)===C.normalize(full)));
+ assert.match(K.terms.find(t=>t.name==='Kinteki geri').meaning,/kinteki/);
+});
+
+test('advanced reviews rotate three complete sets and preserve the grade and scoring gates',()=>{
+ for(const m of T.MODULES.filter(m=>m.belt>=10)){
+  assert.equal(m.pass,m.belt===10?90:95);
+  for(const phase of m.phases){
+   assert.equal(phase.questionSets.length,3);
+   const skills=new Set();
+   for(let attempt=0;attempt<3;attempt++){
+    const ids=T.questionIdsForAttempt(phase,attempt);assert.equal(ids.length,12);assert.equal(new Set(ids).size,12);
+    for(const id of ids){const q=C.QUESTIONS[id];skills.add(q.skill);assert.equal(q.type,'input');assert.ok(q.context.length);for(const answer of q.answers){assert.ok(C.normalize(answer).length>0);assert.ok(answer.length<=600);}}
+    assert.ok(ids.some(id=>C.QUESTIONS[id].audioSequence?.length===T.DEMANDS[m.belt].sequence));
+   }
+   assert.ok(skills.size>=9,'Different mental tasks, not just four naming lists');
+   assert.deepEqual(T.questionIdsForAttempt(phase,3),phase.questionIds);
+   const first=phase.questionSets[0].map(id=>C.QUESTIONS[id]),second=phase.questionSets[1].map(id=>C.QUESTIONS[id]);
+   assert.ok(first.filter((q,i)=>JSON.stringify(q.context)!==JSON.stringify(second[i].context)).length>=8);
+  }
+ }
+ const m=T.modulesForBelt(12)[0],p=C.initial();p.availableBelt=12;
+ const phase=m.phases[0],total=T.questionIdsForAttempt(phase,1).length;
+ assert.equal(C.record(p,phase.id,total-1,total,[]).passed,false);
+ assert.equal(C.record(p,phase.id,total,total,[]).passed,true);
 });

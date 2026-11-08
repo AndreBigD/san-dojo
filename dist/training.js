@@ -4,7 +4,9 @@ const thresholds=[75,75,80,80,80,85,85,85,90,90,90,95,95];
 const complexity=['Nomes e comandos básicos','Base e defesa em conjunto','Altura média e base lateral','Comparar altura e posição','Soco do mesmo lado da base','Soco do lado oposto à base','Preparar, deslocar e parar','Escuta com quatro componentes','Conectar defesa e soco','Diferenciar duas técnicas na mesma sequência','Memória de quatro comandos sem alternativas','Reconstituir cinco componentes','Integração de base, defesa, lado e controle'];
 function add(q){C.QUESTIONS[q.id]=q;return q.id;}
 const extraK=[],extraI=[];
-const input=(id,prompt,answers,why,extra={})=>add({id,type:'input',prompt,answers,why,...extra});
+// As duas formas são usadas no dojo: Uchi/Soto mawashi, com ou sem “geri”.
+function answerVariants(answer){let variants=[answer];for(const name of ['Uchi mawashi','Soto mawashi'])variants=[...new Set(variants.flatMap(value=>[value,value.replace(new RegExp(name+'(?! geri)','gi'),match=>match+' geri')]))];return variants;}
+const input=(id,prompt,answers,why,extra={})=>add({id,type:'input',prompt,answers:answers.flatMap(answerVariants),why,...extra});
 const choice=(id,prompt,options,answer,why,extra={})=>add({id,type:'choice',prompt,options,answer,why,...extra});
 const order=(id,prompt,items,why,extra={})=>add({id,type:'order',prompt,items,why,...extra});
 for(let r=0;r<13;r++){
@@ -48,7 +50,74 @@ const DEMANDS=[
  {terms:6,sequence:8,rounds:7,choices:false,label:'Integrar seis técnicas e corrigir sete relações de lado'},
  {terms:6,sequence:9,rounds:8,choices:false,label:'Memória de nove termos, seis técnicas e oito transições'}
 ];
+function expertQuestions(rank,type,stage,variant=0){
+ const d=DEMANDS[rank],ids=[],seed=rank+stage*11+variant*17+(type==='ido'?7:0),prefix=`expert-${type}-${rank}-${stage}-${variant}-`;
+ const take=(pool,n,offset=0)=>Array.from({length:Math.min(n,pool.length)},(_,i)=>pool[(seed+offset+i*5)%pool.length]);
+ // O passo 5 percorre as 32 técnicas sem repetir dentro de um bloco.
+ const terms=take(K.terms,6),sequence=take(K.terms,d.sequence,9).map(t=>t.name);
+ const emit=(key,skill,prompt,answer,context=[],extra={})=>ids.push(input(prefix+key,prompt,[answer],`Resposta: ${answer}.`,{skill,context,...extra}));
+ const descriptions=items=>items.map(t=>t.meaning),names=items=>items.map(t=>t.name).join(' ');
+ const family=t=>K.groups.find(g=>g.id===t.group).name;
+ const positions=stage===1?[sequence.length-1,1,sequence.length-2,0]:stage===2?Array.from({length:sequence.length},(_,i)=>sequence.length-1-i):sequence.map((_,i)=>i);
+ emit('escuta','memoria','Escute e recupere a sequência.',positions.map(i=>sequence[i]).join(' '),[stage===1?`Escreva as posições ${positions.map(i=>i+1).join(', ')}, nessa ordem.`:stage===2?'Escreva do último termo para o primeiro.':'Escreva todos os termos na ordem ouvida.'],{audioSequence:sequence});
+ emit('nomes','descricao','Recupere as seis técnicas.',names(terms),descriptions(terms),{instruction:'Escreva os nomes completos na ordem das descrições.'});
+ emit('categorias','classificacao','Cruze as técnicas com suas categorias.',terms.map(family).join(' '),terms.map(t=>t.name),{instruction:'Escreva os grupos na ordem: Te waza, Ashi waza, Shuto waza ou Uke waza.'});
+ const bases=[['Zenkutsu dachi','Base avançada'],['Kiba dachi','Base do cavaleiro'],['Sanchin dachi','Base compacta dos três combates'],['Fudo dachi','Posição firme de prontidão']];
+ const pairs=terms.slice(0,4).map((t,i)=>({t,b:bases[(seed+i)%4]}));
+ emit('pares','integracao','Combine base e técnica.',pairs.map(x=>x.b[0]+' '+x.t.name).join(' '),pairs.map(x=>x.b[1]+' + '+x.t.meaning.toLowerCase()),{instruction:'Escreva base antes da técnica, mantendo a ordem dos quatro pares.'});
+ if(type==='kihon'){
+  const contrasts=[['Uchi mawashi','Soto mawashi','Chudan uchi uke','Chudan soto uke'],['Hiji yoko uchi','Hiji ago uchi','Hiji oroshi uchi','Shita tsuki'],['Shuto sakotsu uchioroshi','Shuto sakotsu uchikomi','Shuto uchi uchi','Shuto hizo uchi']];
+  const contrast=contrasts[(stage+variant)%3].map(name=>K.terms.find(t=>t.name===name));
+  emit('contraste','contraste','Diferencie trajetórias e técnicas próximas.',names(contrast),descriptions(contrast),{instruction:'Escreva os quatro nomes, na ordem.'});
+  const wrong=[(seed%3),3+(seed%3)],records=terms.map((t,i)=>`${t.meaning} → ${wrong.includes(i)?terms[(i+1)%6].name:t.name}`);
+  emit('auditoria','diagnostico','Encontre os dois registros trocados.',wrong.map(i=>i+1).join(' '),records,{instruction:'Responda apenas com os dois números dos registros incorretos, em ordem crescente.',responseLabel:'Digite os números dos registros incorretos.'});
+  emit('lacunas','reconstrucao','Complete os nomes técnicos.',names(terms),terms.map(t=>t.name.split(' ').slice(0,-1).join(' ')+' ____'),{instruction:'Escreva cada nome completo, sem deixar lacunas.'});
+  const fragments=take(K.terms,6,4);
+  emit('fragmentos','composicao','Recomponha cada nome.',names(fragments),fragments.map(t=>t.name.split(' ').reverse().join(' / ')),{instruction:'As partes de cada linha estão invertidas. Reescreva os seis nomes completos na ordem das linhas.'});
+ }else{
+  const rounds=Array.from({length:d.rounds},(_,i)=>{const front=(seed+i)%2?'direita':'esquerda',arm=(seed+i*3)%3===0?front:front==='direita'?'esquerda':'direita';return {front,arm,name:arm===front?'Oi tsuki':'Gyaku tsuki'};});
+  emit('lados','relacao','Analise cada base de forma independente.',rounds.map(x=>x.name).join(' '),rounds.map(x=>`Perna ${x.front} à frente; soco com o braço ${x.arm==='direita'?'direito':'esquerdo'}.`),{instruction:'Escreva o nome de cada soco na ordem.'});
+  let front=seed%2?'direita':'esquerda';const initial=front,steps=[];
+  for(let i=0;i<d.rounds;i++){const change=(i+seed)%3!==0;if(change)front=front==='direita'?'esquerda':'direita';const arm=(i+seed)%3===1?'direita':'esquerda';steps.push({change,arm,name:arm===front?'Oi tsuki':'Gyaku tsuki'});}
+  emit('transicoes','transicao','Atualize a base antes de nomear o soco.',steps.map(x=>x.name).join(' '),steps.map(x=>`${x.change?'Troca':'Mantém'} a perna da frente; soca com o braço ${x.arm==='direita'?'direito':'esquerdo'}.`),{instruction:`Comece com a perna ${initial} à frente. Escreva um nome de soco para cada etapa.`});
+  const wrong=[seed%3,3+seed%3],records=rounds.slice(0,6).map((x,i)=>`Perna ${x.front}; braço ${x.arm==='direita'?'direito':'esquerdo'}; registro: ${wrong.includes(i)?x.name==='Oi tsuki'?'Gyaku tsuki':'Oi tsuki':x.name}.`);
+  emit('corrigir','diagnostico','Corrija somente os dois registros incorretos.',wrong.map(i=>rounds[i].name).join(' '),records,{instruction:'A perna indicada está à frente. Escreva apenas os nomes corretos dos dois registros errados, na ordem em que aparecem.'});
+  const swaps=Array.from({length:d.rounds},(_,i)=>(seed+i)%3!==0),start=seed%2?'direita':'esquerda',end=swaps.filter(Boolean).length%2?(start==='direita'?'esquerda':'direita'):start;
+  emit('base-final','raciocinio','Qual perna termina à frente?',end,swaps.map(change=>change?'Troca a perna da frente.':'Mantém a perna da frente.'),{instruction:`Comece com a perna ${start} à frente. Responda direita ou esquerda.`,responseLabel:'Digite direita ou esquerda.'});
+ }
+ if(stage===0){
+  const chosen=take(K.terms,6,3),wrong=[1,4];
+  emit('reparar','correcao','Repare os dois nomes trocados.',names(wrong.map(i=>chosen[i])),chosen.map((t,i)=>`${t.meaning} → ${wrong.includes(i)?chosen[(i+1)%6].name:t.name}`),{instruction:'Escreva somente os nomes que corrigem os registros 2 e 5, nessa ordem.'});
+  const sorted=[...terms].sort((a,b)=>K.groups.findIndex(g=>g.id===a.group)-K.groups.findIndex(g=>g.id===b.group));
+  emit('agrupar','organizacao','Reorganize por família técnica.',names(sorted),terms.map(t=>t.name),{instruction:'Escreva primeiro Te waza, depois Ashi waza, Shuto waza e Uke waza. Dentro de cada grupo, preserve a ordem das linhas.'});
+  const direction=K.terms.filter(t=>['Uchi mawashi','Soto mawashi','Chudan uchi uke','Chudan soto uke'].includes(t.name));
+  const ordered=variant%2?[...direction].reverse():direction;
+  emit('trajetorias','aplicacao','Compare pernas e defesas.',names(ordered),descriptions(ordered),{instruction:'Escreva os nomes completos das quatro técnicas, na ordem.'});
+  const corrected=take(K.terms,6,11);
+  emit('descrever','transferencia','Passe da descrição para a família.',corrected.map(family).join(' '),descriptions(corrected),{instruction:'Identifique mentalmente a técnica e escreva somente sua categoria, na ordem.'});
+ }else if(stage===1){
+  const heard=take(K.terms,d.sequence,13),audio=heard.map(t=>t.name),group=heard[0].group,filtered=heard.filter(t=>t.group===group);
+  emit('filtrar','filtro','Escute e retenha uma única família.',names(filtered),[`Escreva somente ${family(heard[0])}, na ordem ouvida.`],{audioSequence:audio});
+  const partial=audio.filter((_,i)=>i%2===0);
+  emit('alternar','atencao','Recupere as posições ímpares.',partial.join(' '),['Considere apenas a primeira, terceira, quinta e demais posições ímpares.'],{audioSequence:audio});
+  const target=heard[(seed+2)%heard.length];
+  emit('localizar','localizacao','Em qual posição você ouviu esta técnica?',String(heard.indexOf(target)+1),[target.meaning,'Escreva apenas o número da posição.'],{audioSequence:audio,responseLabel:'Digite o número da posição.'});
+  const silent=take(K.terms,6,6);
+  emit('invertido','memoria-visual','Leia e reorganize de trás para frente.',names([...silent].reverse()),silent.map(t=>t.meaning),{instruction:'Escreva os nomes japoneses da última descrição até a primeira.'});
+ }else{
+  const heard=take(K.terms,d.sequence,17),group=heard[0].group,filtered=heard.filter(t=>t.group===group).reverse();
+  emit('dupla-regra','dupla-regra','Filtre e inverta a sequência.',names(filtered),[`Mantenha apenas ${family(heard[0])}.`,`Escreva os nomes selecionados do último para o primeiro.`],{audioSequence:heard.map(t=>t.name)});
+  const combined=take(K.terms,6,14),selected=combined.filter((_,i)=>i%2===1).reverse();
+  emit('criterios','selecao','Aplique duas regras às descrições.',names(selected),descriptions(combined),{instruction:'Use somente as linhas 2, 4 e 6. Responda com os nomes japoneses na ordem 6, 4, 2.'});
+  const chosen=take(K.terms,6,1),target=chosen[seed%6];
+  emit('inconsistencia','evidencia','Qual técnica contradiz esta categoria?',target.name,chosen.map(t=>`${t.name} → ${t===target?K.groups[(K.groups.findIndex(g=>g.id===t.group)+1)%4].name:family(t)}`),{instruction:'Há exatamente uma categoria incorreta. Escreva o nome completo da técnica dessa linha.'});
+  const shuffled=take(K.terms,6,21);
+  emit('sintese','sintese','Integre nome e classificação.',shuffled.map(t=>t.name+' '+family(t)).join(' '),descriptions(shuffled),{instruction:'Para cada descrição, escreva o nome japonês e depois sua categoria. Preserve a ordem das seis linhas.'});
+ }
+ return ids;
+}
 function advancedQuestions(rank,type,stage){
+ if(rank>=10)return expertQuestions(rank,type,stage);
  const d=DEMANDS[rank],ids=[],prefix=`v2-${type}-${rank}-${stage}-`,isK=type==='kihon';
  const emit=(key,prompt,answer,why,extra={})=>{ids.push(input(prefix+key,prompt,[answer],why,extra));};
  const terms=Array.from({length:d.terms},(_,j)=>K.terms[(rank*3+stage*5+j*7)%K.terms.length]);
@@ -113,10 +182,16 @@ for(let r=0;r<13;r++)for(const type of ['kihon','ido']){
  const demand=DEMANDS[r],phaseIds=[0,1,2].map(stage=>advancedQuestions(r,type,stage));
  MODULES.push({id,kind:'training',type,belt:r,level:r+1,title:`${name} · ${G.BELTS[r].name}`,subtitle:demand.label,icon:type==='kihon'?'拳':'➜',pass:thresholds[r],requiresSensei:false,video:'JNHnvgQyuW8',diagram:type==='kihon'?'levels':'ido',words:COMMANDS[r],notes:[`Exigência desta faixa: ${demand.label.toLowerCase()}.`,`${demand.terms} técnica(s) por bloco de escrita · ${demand.sequence} termos na memória auditiva · ${type==='ido'?demand.rounds+' rodada(s) de relação entre os lados':'classificação e contraste entre técnicas próximas'}.`,`As três fases usam questões diferentes. Você pode ouvir novamente; a primeira resposta conta para a nota.`,type==='kihon'?'As descrições usam o catálogo do San Dojo. Compare nomes próximos, recupere a escrita e conecte base e técnica.':'Analise cada transição pela perna que está à frente naquele momento, sem supor que o soco mantém o mesmo nome após uma mudança de lado.','Estas sequências são exercícios de estudo, não katas nem programa oficial de graduação. A execução física e a graduação real continuam com o sensei.'],phases:phaseIds.map((ids,i)=>({id:`${id}-${i+1}`,title:[type==='kihon'?'Precisão dos fundamentos':'Lados e transições','Escuta e memória',`Desafio ${name}`][i],desc:[`Recupere ${demand.terms} técnica(s) por bloco; diferencie nomes próximos.`,`Reconstrua até ${demand.sequence} termos e selecione as posições pedidas.`,`Integre os conhecimentos sem reduzir a exigência: meta de ${thresholds[r]}%.`][i],exam:i===2,questionIds:ids}))});
 }
+for(const m of MODULES)if(m.belt>=10)m.phases.forEach((phase,stage)=>{
+ phase.questionSets=[phase.questionIds,expertQuestions(m.belt,m.type,stage,1),expertQuestions(m.belt,m.type,stage,2)];
+ phase.title=['Precisão e diagnóstico','Escuta e atenção','Integração e raciocínio'][stage];
+ phase.desc=['Diferencie trajetórias, identifique registros incorretos e conecte técnica e categoria.','Alterne reconstrução, localização, seleção e memória auditiva.','Cruze regras e evidências para resolver situações diferentes.'][stage];
+});
 C.EXTRA_MODULES.push(...MODULES);
+function questionIdsForAttempt(phase,attempts=0){const sets=phase.questionSets;return sets?sets[Math.max(0,Math.trunc(Number(attempts)||0))%sets.length]:phase.questionIds;}
 function modulesForBelt(rank){return MODULES.filter(m=>m.belt===rank);}
 function ready(progress,rank){return modulesForBelt(rank).every(m=>C.moduleQuizPassed(progress,m.id));}
 function approve(progress,game,rank,note='',now=Date.now()){if(rank>game.belt||!ready(progress,rank))throw new Error('Conclua as fases de Kihon e Ido geiko desta faixa primeiro.');progress.approvals['grade-'+rank]={at:now,note:String(note).slice(0,300)};game.mastery??={};game.mastery[rank]=true;}
 function syncMastery(progress,game){game.mastery=Object.fromEntries(Array.from({length:13},(_,rank)=>[rank,ready(progress,rank)]));game.requireMastery=true;return game.mastery;}
-return {MODULES,COMMANDS,DEMANDS,thresholds,complexity,modulesForBelt,ready,approve,syncMastery};
+return {MODULES,COMMANDS,DEMANDS,thresholds,complexity,modulesForBelt,ready,approve,syncMastery,questionIdsForAttempt};
 });
