@@ -3,7 +3,7 @@ function beltArt(index, small = false) {
   const belt = G.BELTS[index];
   return `<span class="belt-drawing ${small ? 'small' : ''}" style="--belt:${belt.color};--stripe:${belt.stripe || belt.color}" role="img" aria-label="Faixa ${belt.name}"><span class="belt-band"></span><span class="belt-tail left-tail"></span><span class="belt-tail right-tail"></span><span class="belt-knot"></span></span>`;
 }
-function mentor(className = '') { return `<img class="sensei-image ${className}" src="assets/sensei-cartoon-limpo.png" alt="Avatar ilustrado do sensei do San Dojo, baseado na sua foto">`; }
+function mentor(className = '',days,today) { if(days&&today)return DojoMascot.portrait(days,today,className);return `<img class="sensei-image ${className}" src="assets/sensei-cartoon-limpo.png" alt="Avatar ilustrado do sensei do San Dojo, baseado na sua foto">`; }
 function formatDay(key) { return `${key.slice(8, 10)}/${key.slice(5, 7)}`; }
 function weekRange() { const start = state.game.currentWeek; return `${formatDay(start)} a ${formatDay(G.shiftDay(start, 6))}`; }
 function weekXP() { return G.current(state.game).xp; }

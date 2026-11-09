@@ -1,6 +1,6 @@
-# Atividades interativas — atualização pendente de publicação
+# Atividades interativas — atualização publicada
 
-Preparada em 8 de novembro de 2026. O site público ainda não contém esta atualização: o Netlify pausou novos envios por limite de créditos. O ciclo atual termina em 28 de novembro, 23h59 no horário de Brasília; a renovação é prevista para 29 de novembro.
+Preparada em 8 e publicada em 9 de novembro de 2026, após a ativação do plano Personal no Netlify.
 
 ## O que muda
 
@@ -15,6 +15,6 @@ Preparada em 8 de novembro de 2026. O site público ainda não contém esta atua
 
 49 testes automatizados aprovados, incluindo eventos de associação, correção de pares, respostas em etapas, verificação pelo manipulador real da atividade, bloqueio após acerto e preservação da nota de primeira tentativa. A validação usa dados sintéticos e uma superfície DOM isolada, sem contas reais.
 
-Ainda é necessário conferir visualmente os dois formatos no navegador e no iPhone quando houver uma hospedagem de prévia ou publicação disponível. A prévia HTML independente serve para experimentar as interações sem entrar em conta ou alterar progresso.
+Os cartões avançados foram conferidos pela interface publicada em largura de celular: preenchimento, avanço e conservação da resposta, sem confirmar a questão antes de todos os passos. A associação tem eventos e correção cobertos pelos testes. A conferência no iPhone real continua sendo feita pelo usuário. A prévia HTML independente permite experimentar sem entrar em conta ou alterar progresso.
 
 Execute `npm test` para repetir as verificações. Novos testes em `test-interactive.cjs`; implementação em `dist/interactive-activities.js` e `dist/interactive-activities.css`.

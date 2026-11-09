@@ -4,7 +4,7 @@ Aplicativo web de aprendizagem de **karatê Shinkyokushin**, criado para o San D
 
 **[Acessar o aplicativo](https://sandojokarate.com.br/)** · **[Guia de aprendizagem](https://sandojokarate.com.br/aprender.html)**
 
-**Próxima atualização:** atividades de associação e desafios em cartões estão implementados neste repositório, com 49 testes aprovados, e aguardam publicação. [Detalhes e validação](docs/ATIVIDADES-INTERATIVAS.md).
+**Atualização publicada:** atividades de associação, desafios em cartões e cinco comemorações animadas do mascote. O sensei também muda de expressão conforme os dias de prática. [Demonstração](https://sandojokarate.com.br/mascot-preview.html) · [Regras e validação](docs/MASCOTE.md).
 
 ![Apresentação do San Dojo](docs/san-dojo.png)
 
@@ -17,7 +17,7 @@ O San Dojo aproxima o estudo do karatê da rotina dos alunos: apresenta conceito
 - **32 módulos e 102 fases**, com dificuldade progressiva e trilhas de Kihon e Idogeiko para 13 graduações ilustrativas.
 - Dificuldade que cresce a cada faixa: reconhecimento inicial, escrita sem alternativas a partir da laranja, nove termos auditivos e oito transições de lado na preta.
 - Exercícios de vocabulário, posições, técnicas e princípios do dojo.
-- Mascote com três poses e expressões próprias (aprovação, reflexão e comemoração), pistas acolhedoras nos erros e celebração ao concluir fases, respeitando a preferência por movimento reduzido.
+- Mascote com cinco clipes de comemoração e expressões que acompanham a constância, além de reações às respostas. Reprodução inline, opção de pular/repetir e preferência por movimentos reduzidos respeitada.
 - Catálogo de **23 katas** e **32 técnicas de Kihon**, organizado por Te waza, Ashi waza, Shuto waza e Uke waza.
 - Áudios de pronúncia japonesa, contagem e sete juramentos em português e japonês.
 - XP semanal e avanço automático por notas e estudo, sem aprovação manual.
