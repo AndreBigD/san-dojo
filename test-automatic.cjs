@@ -4,7 +4,7 @@ test('only an authenticated administrator at black belt can review locked phases
  const source=fs.readFileSync('./dist/learn-app.js','utf8').split('try{const saved=')[0];
  for(const [admin,belt,expected] of [[true,12,true],[false,12,false],[true,0,false]]){
   const course={...C},account={canManage:()=>admin};
-  const context=vm.createContext({DojoCourse:course,G,DojoAccounts:account,document:{querySelector:()=>null}});
+  const context=vm.createContext({DojoCourse:course,G,DojoEconomy:require('./dist/dojo-economy.js'),DojoAvatar:require('./dist/player-avatar.js'),DojoAccounts:account,document:{querySelector:()=>null}});
   vm.runInContext(source,context);vm.runInContext(`appReady=true;state.game.belt=${belt}`,context);
   assert.equal(vm.runInContext("C.phaseUnlocked(state.learning,'integracao-4')",context),expected);
   assert.equal(vm.runInContext('Object.keys(state.learning.phases).length',context),0);

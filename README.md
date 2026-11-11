@@ -6,7 +6,7 @@ Aplicativo web de aprendizagem de **karatê Shinkyokushin**, criado para o San D
 
 **Atualização publicada:** atividades de associação, desafios em cartões e cinco comemorações animadas do mascote. O sensei também muda de expressão conforme os dias de prática. [Demonstração](https://sandojokarate.com.br/mascot-preview.html) · [Regras e validação](docs/MASCOTE.md).
 
-**Ajuste preparado em 11/11:** versão bem musculosa do sensei ao alcançar 14 dias seguidos e na comemoração “Mais forte”, aguardando envio do pacote ao Netlify.
+**Atualização preparada em 11/11:** Kyokushin Coins com loja de energia e bônus de XP, editor simples do avatar com tipo de personagem, cabelo e faixa real, além do mascote musculoso. Código e pacote prontos, aguardando publicação no Netlify. [Regras e validação](docs/KC-E-AVATAR.md).
 
 ![Apresentação do San Dojo](docs/san-dojo.png)
 
@@ -25,6 +25,8 @@ O San Dojo aproxima o estudo do karatê da rotina dos alunos: apresenta conceito
 - XP semanal e avanço automático por notas e estudo, sem aprovação manual.
 - 25 energias: 5 por atividade e recarga de 5 a cada 30 minutos.
 - Sequência diária, calendário de atividades e marcos de constância.
+- Kyokushin Coins: 10 KC por fase aprovada por dia, carteira com histórico, recarga de energia e bônus de XP com confirmação de troca.
+- Avatar simples personalizável, masculino ou feminino, com cabelo, cores, expressão e faixa real independente da graduação ilustrativa.
 - Login Google via Supabase, progresso por conta e painel administrativo de materiais.
 - Controles de responsáveis e separação de permissões entre aluno e administrador.
 - Interface responsiva com identidade visual própria e uso pela Tela de Início do iPhone.
