@@ -8,6 +8,8 @@ Aplicativo web de aprendizagem de **karatê Shinkyokushin**, criado para o San D
 
 **Atualização preparada em 11/11:** Kyokushin Coins com loja de energia e bônus de XP, editor simples do avatar com tipo de personagem, cabelo e faixa real, além do mascote musculoso. Código e pacote prontos, aguardando publicação no Netlify. [Regras e validação](docs/KC-E-AVATAR.md).
 
+**Assinatura em preparação:** San Dojo Plus com energia ilimitada por R$ 11,99/mês, Checkout recorrente do Asaas, confirmação no servidor, histórico e cancelamento. Integração desativada, aguardando homologação no Sandbox e publicação; não há cobranças reais ativadas. [Instalação, testes e limites](docs/ASSINATURA-ASAAS.md).
+
 ![Apresentação do San Dojo](docs/san-dojo.png)
 
 ## O projeto

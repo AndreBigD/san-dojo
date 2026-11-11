@@ -1,0 +1,8 @@
+# Mesclar no supabase/config.toml. Não substituir a configuração do dojo-push.
+# A autenticação do usuário é validada com auth.getUser dentro da função.
+[functions.dojo-billing]
+verify_jwt = false
+
+# O Asaas autentica pelo header asaas-access-token; não envia JWT Supabase.
+[functions.dojo-asaas-webhook]
+verify_jwt = false

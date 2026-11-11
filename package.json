@@ -5,8 +5,9 @@
   "description": "Aplicativo web de aprendizagem de karatê Shinkyokushin",
   "scripts": {
     "start": "node scripts/serve.cjs",
-    "test": "node --test test-course.cjs test-progression.cjs test-training.cjs test-streaks.cjs test-automatic.cjs test-completion.cjs test-push-delivery.cjs test-interactive.cjs test-mascot.cjs test-economy-avatar.cjs"
+    "test": "node --test test-course.cjs test-progression.cjs test-training.cjs test-streaks.cjs test-automatic.cjs test-completion.cjs test-push-delivery.cjs test-interactive.cjs test-mascot.cjs test-economy-avatar.cjs test-billing.cjs test-billing-db.cjs"
   },
+  "devDependencies": {"@electric-sql/pglite": "0.5.13"},
   "engines": {
     "node": ">=20"
   }

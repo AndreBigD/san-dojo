@@ -38,8 +38,10 @@
   function create(now = Date.now()) {
     return { version: 1, currentWeek: weekKey(now), belt: 0, highestBelt: 0, weeks: {}, history: [], energy: { version: RULES.energyVersion, count: RULES.maxEnergy, at: now }, premiumDemoUntil: 0 };
   }
-  function unlimited(game, now = Date.now()) { return RULES.unlimitedEnergy; }
-  function premium(game, now = Date.now()) { return Number(game.premiumDemoUntil) > now; }
+  let premiumProvider = () => false;
+  function setPremiumProvider(provider) { premiumProvider = typeof provider === 'function' ? provider : () => false; }
+  function premium(game, now = Date.now()) { try { return premiumProvider(now) === true; } catch { return false; } }
+  function unlimited(game, now = Date.now()) { return RULES.unlimitedEnergy || premium(game, now); }
   function current(game) { return game.weeks[game.currentWeek] || { xp: 0, days: [] }; }
   function outcome(belt, xp, eligible = true) {
     if (xp >= RULES.promoteXP && belt < BELTS.length - 1 && !eligible) return { belt, kind: 'awaiting_mastery' };
@@ -106,5 +108,5 @@
     if (xp > 0 && !entry.days.includes(day)) entry.days.push(day);
     return entry;
   }
-  return { RULES, BELTS, create, dayKey, weekKey, shiftDay, premium, unlimited, current, outcome, reconcile, refill, nextChargeMs, reserve, refund, rewardEnergy, credit };
+  return { RULES, BELTS, create, dayKey, weekKey, shiftDay, premium, unlimited, setPremiumProvider, current, outcome, reconcile, refill, nextChargeMs, reserve, refund, rewardEnergy, credit };
 });
