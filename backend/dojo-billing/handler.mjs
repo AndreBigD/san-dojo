@@ -1,12 +1,49 @@
-import {PLAN,billingMode,eligible,checkoutPayload,checkoutURL,paymentSnapshot,tokenMatches} from './core.mjs';
+import {PLAN,billingMode,eligible,checkoutPayload,checkoutURL,paymentSnapshot,subscriptionMatches,dateKey,tokenMatches} from './core.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
-export function createHandlers({store,getUser,provider,mode:rawMode,site,webhookToken,imageBase64,salesEnabled=false,apiKeyConfigured=false,now=()=>new Date()}){
+export function createHandlers({store,getUser,provider,mode:rawMode,site,webhookToken,imageBase64,salesEnabled=false,apiKeyConfigured=false,now=()=>new Date(),report=()=>{}}){
  const mode=billingMode(rawMode),origin=new URL(site).origin;
+ // Best-effort per-instance backoff only. Entitlements and idempotency remain in Postgres.
+ const recovering=new Map();
  const json=(data,status=200,cors=false)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...(cors?{'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS'}:{})}});
  async function body(req){const raw=await req.text();if(raw.length>65536)throw fail(413,'Pedido muito grande.');try{return JSON.parse(raw);}catch{throw fail(400,'Pedido inválido.');}}
+ async function recover(o){
+  if(!o.checkout_id&&!o.subscription_id)return {sync:'creating',message:'A contratação ainda está sendo preparada. Não contrate novamente.'};
+  const observed=now(),query=new URLSearchParams({limit:'10',offset:'0','dueDate[ge]':dateKey(new Date(observed.getTime()-32*86400000)),'dueDate[le]':dateKey(observed)});
+  if(o.subscription_id){if(!/^sub_[A-Za-z0-9_]+$/.test(o.subscription_id))throw Error('Invalid stored subscription');query.set('subscription',o.subscription_id);}
+  else{checkoutURL(o.checkout_id,mode);query.set('checkoutSession',o.checkout_id);}
+  const list=await provider('/payments?'+query);
+  if(!Array.isArray(list.data)||list.hasMore!==false||list.data.length>10)throw Error('Incomplete payment list');
+  const subscriptions=new Map();
+  // Fetch fresh complete resources, not prices or confirmation supplied by a callback or the browser.
+  const checked=await Promise.all(list.data.map(async row=>{
+   if(!/^pay_[A-Za-z0-9_]+$/.test(row.id||''))throw Error('Invalid listed payment');
+   const payment=await provider('/payments/'+row.id);
+   if(payment.id!==row.id||!/^sub_[A-Za-z0-9_]+$/.test(payment.subscription||''))throw Error('Invalid payment resource');
+   if(!subscriptions.has(payment.subscription))subscriptions.set(payment.subscription,provider('/subscriptions/'+payment.subscription));
+   const subscription=await subscriptions.get(payment.subscription);
+   const evidence=o.subscription_id?null:{checkout:o.checkout_id,payment:row.id};
+   return {subscription,snapshot:paymentSnapshot(payment,subscription,o,evidence)};
+  }));
+  if(new Set(checked.map(x=>x.subscription.id)).size>1)throw Error('Conflicting subscriptions');
+  for(const {subscription,snapshot} of checked){
+   await store.apply(o,mode,'reconcile:'+crypto.randomUUID(),'PAYMENT_RECONCILED',subscription.id,snapshot,observed.toISOString());
+   if(subscription.deleted||subscription.status==='INACTIVE')await store.apply(o,mode,'reconcile:'+crypto.randomUUID(),'SUBSCRIPTION_INACTIVATED',subscription.id,null,observed.toISOString());
+  }
+  return checked.length?{sync:'checked',message:'A cobrança foi localizada no Asaas, mas ainda não há período pago confirmado. Não contrate novamente.'}:{sync:'waiting',message:'O Asaas ainda não disponibilizou uma cobrança desta contratação. Aguarde um minuto e atualize a situação; não contrate novamente.'};
+ }
+ async function recoverOnce(o){
+  const key=mode+':'+o.id,t=now().getTime(),prior=recovering.get(key);
+  if(prior&&t-prior.at<60000)return prior.promise;
+  if(recovering.size>=1000)recovering.delete(recovering.keys().next().value);
+  const promise=recover(o).catch(error=>{
+   const denied=[401,403].includes(error.status),code=denied?'provider_access_denied':error.status?'provider_unavailable':'payment_verification_failed';report(code);
+   return {sync:code,message:denied?'O Asaas recusou a consulta do pagamento. André precisa conferir a chave e as permissões da integração; não contrate novamente.':'Não foi possível conferir a cobrança no Asaas agora. Tente atualizar a situação em um minuto. Se persistir, fale com André; não contrate novamente.'};
+  });
+  recovering.set(key,{at:t,promise});return promise;
+ }
  async function billing(req){
   // Public health reports configuration presence only; never reads users, payments or provider data.
-  if(req.method==='GET'&&new URL(req.url).pathname.endsWith('/health'))return json({service:'san-dojo-billing',version:'2026-11-11.2',environment:mode,modeConfigured:mode!=='disabled',modeNeedsFormatting:mode==='disabled'&&String(rawMode||'').trim().toLowerCase()==='sandbox',checkoutEnabled:salesEnabled,apiKeyConfigured,webhookTokenConfigured:typeof webhookToken==='string'&&webhookToken.length>=32});
+  if(req.method==='GET'&&new URL(req.url).pathname.endsWith('/health'))return json({service:'san-dojo-billing',version:'2026-11-11.3',environment:mode,modeConfigured:mode!=='disabled',modeNeedsFormatting:mode==='disabled'&&String(rawMode||'').trim().toLowerCase()==='sandbox',checkoutEnabled:salesEnabled,apiKeyConfigured,webhookTokenConfigured:typeof webhookToken==='string'&&webhookToken.length>=32});
   if(req.headers.get('origin')!==origin)return json({error:'Origem não autorizada.'},403);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'}});
   if(req.method!=='POST')return json({error:'Método não permitido.'},405,true);
@@ -16,7 +53,14 @@ export function createHandlers({store,getUser,provider,mode:rawMode,site,webhook
    const input=await body(req);
    if(mode==='disabled')return json({mode,plan:PLAN,active:false,available:false,serverNow:now().toISOString()},200,true);
    if(mode==='sandbox'&&!access.admin)throw fail(403,'Os testes de assinatura estão disponíveis apenas ao administrador.');
-   if(input.action==='status')return json({...await store.status(user.id,mode),mode,plan:PLAN,available:salesEnabled},200,true);
+   if(input.action==='status'){
+    let status=await store.status(user.id,mode),sync={};
+    if(!status.active&&status.order){
+     const o=await store.ownOrder(user.id,mode,status.order.id);
+     if(o){sync=await recoverOnce(o);status=await store.status(user.id,mode);if(status.active)sync={sync:'recovered',message:'Confirmação recuperada. Sua energia ilimitada já está ativa.'};}
+    }
+    return json({...status,...sync,mode,plan:PLAN,available:salesEnabled},200,true);
+   }
    if(input.action==='checkout'){
     if(!salesEnabled)throw fail(409,'Novas assinaturas ainda não estão disponíveis.');
     if(!eligible(access.profile,access.guardian,access.erasure,access.admin))throw fail(403,'Regularize a autorização do responsável na sua conta.');
@@ -60,7 +104,7 @@ export function createHandlers({store,getUser,provider,mode:rawMode,site,webhook
     const payment=await provider('/payments/'+id);
     if(!/^sub_[A-Za-z0-9_]+$/.test(payment.subscription||''))return json({received:true});
     const subscription=await provider('/subscriptions/'+payment.subscription);
-    o=await store.lookup(mode,subscription.checkoutSession,subscription.id);if(!o)return json({received:true});
+    o=await store.lookup(mode,payment.checkoutSession||subscription.checkoutSession,subscription.id);if(!o)return json({received:true});
     snapshot=paymentSnapshot(payment,subscription,o);sub=subscription.id;
    }else if(kind.startsWith('SUBSCRIPTION_')){
     const id=event.subscription?.id;if(!/^sub_[A-Za-z0-9_]+$/.test(id||''))throw fail(400,'Invalid subscription');
@@ -68,7 +112,7 @@ export function createHandlers({store,getUser,provider,mode:rawMode,site,webhook
     if(kind!=='SUBSCRIPTION_DELETED'){
      const subscription=await provider('/subscriptions/'+id);
      o??=await store.lookup(mode,subscription.checkoutSession,id);
-     if(o&&(subscription.checkoutSession!==o.checkout_id||subscription.cycle!=='MONTHLY'||Math.round(subscription.value*100)!==o.price_cents))throw fail(400,'Invalid subscription terms');
+     if(o)subscriptionMatches(subscription,o);
      if(subscription.deleted||subscription.status==='INACTIVE')kind='SUBSCRIPTION_INACTIVATED';
     }
     if(!o)return json({received:true});sub=id;

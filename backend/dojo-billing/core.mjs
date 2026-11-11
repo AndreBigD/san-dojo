@@ -21,10 +21,21 @@ export function checkoutPayload(order,site,imageBase64,now=new Date()){
   subscription:{cycle:PLAN.cycle,nextDueDate:dateKey(now)}};
 }
 export function checkoutURL(id,mode){if(!/^[a-f0-9-]{36}$/i.test(id)||!ENVIRONMENTS[mode])throw Error('Invalid checkout');return (mode==='sandbox'?'https://sandbox.asaas.com':'https://asaas.com')+'/checkoutSession/show?id='+encodeURIComponent(id);}
-export function paymentSnapshot(payment,subscription,order){
+export function subscriptionMatches(subscription,order,checkoutEvidence=null){
+ if(!/^sub_[A-Za-z0-9_]+$/.test(subscription.id||''))throw Error('Invalid subscription');
+ if(order.subscription_id&&order.subscription_id!==subscription.id)throw Error('Unrelated subscription');
+ if(subscription.checkoutSession&&subscription.checkoutSession!==order.checkout_id)throw Error('Unrelated checkout');
+ const checkoutLinked=Boolean(order.checkout_id&&(subscription.checkoutSession===order.checkout_id||checkoutEvidence===order.checkout_id));
+ if(!checkoutLinked&&order.subscription_id!==subscription.id)throw Error('Missing checkout link');
+ if(subscription.cycle!=='MONTHLY'||cents(subscription.value)!==order.price_cents)throw Error('Unexpected subscription terms');
+}
+export function paymentSnapshot(payment,subscription,order,listedCheckout=null){
  if(!/^pay_[A-Za-z0-9_]+$/.test(payment.id)||!/^sub_[A-Za-z0-9_]+$/.test(subscription.id))throw Error('Invalid resource');
- if(payment.subscription!==subscription.id||payment.customer!==subscription.customer||subscription.checkoutSession!==order.checkout_id||payment.checkoutSession&&payment.checkoutSession!==order.checkout_id)throw Error('Unrelated payment');
- if(subscription.cycle!=='MONTHLY'||cents(subscription.value)!==order.price_cents||cents(payment.value)!==order.price_cents||payment.billingType!=='CREDIT_CARD')throw Error('Unexpected payment terms');
+ if(payment.subscription!==subscription.id||typeof payment.customer!=='string'||!payment.customer||payment.customer!==subscription.customer||payment.checkoutSession&&payment.checkoutSession!==order.checkout_id)throw Error('Unrelated payment');
+ // Evidence is produced only by a server-side GET filtered by this order's checkout, never by browser input.
+ const proof=payment.checkoutSession||(listedCheckout?.payment===payment.id?listedCheckout.checkout:null);
+ subscriptionMatches(subscription,order,proof);
+ if(cents(payment.value)!==order.price_cents||payment.billingType!=='CREDIT_CARD')throw Error('Unexpected payment terms');
  const period=paymentPeriod(payment.dueDate),revoked=payment.deleted===true||!['CONFIRMED','RECEIVED'].includes(payment.status)||(payment.refunds||[]).some(r=>r.status==='DONE'&&Number(r.value)>0)||Boolean(payment.chargeback&&payment.chargeback.status!=='DONE');
  return {payment:payment.id,subscription:subscription.id,amount:order.price_cents,status:String(payment.status),revoked,start:period.start,end:period.end};
 }

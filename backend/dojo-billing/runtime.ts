@@ -26,5 +26,5 @@ const store={
 };
 // Provider credentials are read only by this server. No API key or payment data is sent to the browser.
 const provider=(...args:Parameters<ReturnType<typeof asaasClient>>)=>asaasClient({mode,key:env('ASAAS_API_KEY')})(...args);
-export const handlers=createHandlers({store,mode:env('ASAAS_MODE'),provider,apiKeyConfigured:Boolean(env('ASAAS_API_KEY').trim()),salesEnabled:env('ASAAS_CHECKOUT_ENABLED')==='true',site:env('SAN_DOJO_SITE_URL')||'https://sandojokarate.com.br/',webhookToken:env('ASAAS_WEBHOOK_TOKEN'),imageBase64:PLAN_IMAGE_BASE64,
+export const handlers=createHandlers({store,mode:env('ASAAS_MODE'),provider,apiKeyConfigured:Boolean(env('ASAAS_API_KEY').trim()),salesEnabled:env('ASAAS_CHECKOUT_ENABLED')==='true',site:env('SAN_DOJO_SITE_URL')||'https://sandojokarate.com.br/',webhookToken:env('ASAAS_WEBHOOK_TOKEN'),imageBase64:PLAN_IMAGE_BASE64,report:(code:string)=>console.error('San Dojo billing sync: '+code),
  getUser:async(header:string|null)=>{const token=header?.match(/^Bearer (.+)$/i)?.[1];if(!token)return null;const r=await db.auth.getUser(token);return r.error?null:r.data.user;}});

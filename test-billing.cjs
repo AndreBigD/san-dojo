@@ -78,3 +78,71 @@ test('public health reports only configuration presence, never secrets, accounts
  assert.equal(calls,0);assert.ok(!JSON.stringify(value).includes('private-token'));assert.deepEqual(Object.keys(value).sort(),['apiKeyConfigured','checkoutEnabled','environment','modeConfigured','modeNeedsFormatting','service','version','webhookTokenConfigured'].sort());
  assert.equal((await handlers.billing(new Request('https://server/functions/v1/dojo-billing',{headers:{origin:'https://sandojokarate.com.br'}}))).status,405);
 });
+
+test('payment linking accepts a verified payment checkout or previously bound subscription, but rejects conflicting and missing links',async()=>{
+ const C=await core(),o={checkout_id:checkout,price_cents:1199},s={id:'sub_abc',customer:'cus_abc',cycle:'MONTHLY',value:11.99};
+ const p={id:'pay_abc',customer:'cus_abc',subscription:s.id,checkoutSession:checkout,billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:'2026-11-11'};
+ assert.equal(C.paymentSnapshot(p,s,o).revoked,false,'checkout can be present on the payment only');
+ const bare={...p,checkoutSession:null};
+ assert.throws(()=>C.paymentSnapshot(bare,s,o));
+ assert.equal(C.paymentSnapshot(bare,s,o,{payment:p.id,checkout}).revoked,false,'a server-filtered checkout list proves the initial link');
+ assert.throws(()=>C.paymentSnapshot(bare,s,o,{payment:'pay_other',checkout}));
+ assert.equal(C.paymentSnapshot(bare,s,{...o,subscription_id:s.id}).revoked,false);
+ assert.throws(()=>C.paymentSnapshot(p,s,{...o,subscription_id:'sub_other'}));
+ assert.throws(()=>C.paymentSnapshot(p,{...s,checkoutSession:'different'},o));
+ assert.throws(()=>C.paymentSnapshot({...p,customer:null},{...s,customer:null},o));
+ assert.throws(()=>C.paymentSnapshot(bare,s,{checkout_id:null,subscription_id:null,price_cents:1199}));
+});
+
+async function recoveryHarness({mode='sandbox',admin=true,active=false,providerError=null,listOverride=null,paymentPatch={},subscriptionPatch={}}={}){
+ const {createHandlers}=await import('./backend/dojo-billing/handler.mjs');
+ const order={id,user_id:id,environment:mode,checkout_id:checkout,price_cents:1199,state:'pending',subscription_id:null};
+ const subscription={id:'sub_abc',customer:'cus_abc',cycle:'MONTHLY',value:11.99,...subscriptionPatch};
+ const payment={id:'pay_abc',customer:'cus_abc',subscription:'sub_abc',billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:'2026-11-11',...paymentPatch};
+ let clock=new Date('2026-11-11T16:00:00Z');const calls=[],applied=[],lookups=[],reports=[];
+ const store={access:async()=>({admin}),status:async()=>({active,serverNow:clock.toISOString(),order:{id,state:order.state},payments:applied.map(a=>a[5]).filter(Boolean)}),ownOrder:async(user,env,oid)=>{lookups.push([user,env,oid]);return user===id&&env===mode&&oid===id?order:null;},apply:async(...a)=>{applied.push(a);order.subscription_id=a[4];order.state='active';active=!a[5].revoked;}};
+ const provider=async(path,method='GET')=>{calls.push({path,method});if(providerError)throw providerError;if(path.startsWith('/payments?'))return listOverride||{data:[{id:payment.id}],hasMore:false};if(path==='/payments/pay_abc')return payment;if(path==='/subscriptions/sub_abc')return subscription;throw Error('Unexpected provider call');};
+ const h=createHandlers({store,getUser:async header=>header==='Bearer signed-in'?{id}:null,provider,mode,site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40),now:()=>clock,report:code=>reports.push(code)});
+ const request=(input={})=>new Request('https://server/dojo-billing',{method:'POST',headers:{origin:'https://sandojokarate.com.br',authorization:'Bearer signed-in'},body:JSON.stringify({action:'status',...input})});
+ return {h,request,calls,applied,lookups,reports,advance:ms=>{clock=new Date(clock.getTime()+ms);}};
+}
+
+test('refresh recovers a missing webhook for the signed-in order using GET only and coalesces repeated requests',async()=>{
+ const T=await recoveryHarness();
+ const replies=await Promise.all([T.h.billing(T.request({orderId:'attacker-order',checkoutId:'attacker-checkout',active:true})),T.h.billing(T.request())]);
+ for(const response of replies){const value=await response.json();assert.equal(value.active,true);assert.equal(value.sync,'recovered');assert.equal(value.mode,'sandbox');assert.equal(value.payments.length,1);}
+ assert.equal(T.applied.length,1);assert.deepEqual(T.lookups,[[id,'sandbox',id],[id,'sandbox',id]]);
+ const query=new URL('https://server'+T.calls[0].path).searchParams;
+ assert.equal(query.get('checkoutSession'),checkout);assert.equal(query.get('dueDate[ge]'),'2026-10-10');assert.equal(query.get('dueDate[le]'),'2026-11-11');
+ assert.ok(T.calls.every(c=>c.method==='GET'));assert.equal(T.calls.length,3);
+ await T.h.billing(T.request());assert.equal(T.calls.length,3,'an active entitlement uses the ledger, rather than polling the provider');
+});
+
+test('pending, refunded and invalid payments never become paid access during recovery',async()=>{
+ for(const status of ['PENDING','REFUNDED','CHARGEBACK_REQUESTED']){
+  const T=await recoveryHarness({paymentPatch:{status}}),value=await (await T.h.billing(T.request())).json();
+  assert.equal(value.active,false);assert.equal(T.applied[0][5].revoked,true);
+ }
+ for(const options of [{paymentPatch:{customer:'cus_someone_else'}},{paymentPatch:{value:1}},{paymentPatch:{billingType:'PIX'}},{paymentPatch:{checkoutSession:'different'}},{subscriptionPatch:{checkoutSession:'different'}},{subscriptionPatch:{cycle:'WEEKLY'}},{listOverride:{data:[{id:'pay_abc'}],hasMore:true}},{paymentPatch:{id:'pay_wrong'}}]){
+  const T=await recoveryHarness(options),value=await (await T.h.billing(T.request())).json();
+  assert.equal(value.active,false);assert.equal(T.applied.length,0);assert.equal(value.sync,'payment_verification_failed');
+ }
+});
+
+test('recovery is blocked for students in sandbox, gives safe actionable errors and never exposes provider responses',async()=>{
+ const blocked=await recoveryHarness({admin:false});assert.equal((await blocked.h.billing(blocked.request())).status,403);assert.equal(blocked.calls.length,0);assert.equal(blocked.lookups.length,0);
+ const denied=await recoveryHarness({providerError:Object.assign(Error('sensitive provider error'),{status:401})});
+ let value=await (await denied.h.billing(denied.request())).json();assert.equal(value.active,false);assert.equal(value.sync,'provider_access_denied');assert.match(value.message,/chave e as permissões/);assert.ok(!JSON.stringify(value).includes('sensitive'));
+ await denied.h.billing(denied.request());assert.equal(denied.calls.length,1,'backoff avoids repeat calls on double taps');
+ denied.advance(60001);await denied.h.billing(denied.request());assert.equal(denied.calls.length,2,'a later refresh can retry');
+ const missing=await recoveryHarness({listOverride:{data:[],hasMore:false}});value=await (await missing.h.billing(missing.request())).json();assert.equal(value.sync,'waiting');assert.equal(missing.applied.length,0);
+});
+
+test('payment webhook can bind its first payment when checkoutSession is only on the payment',async()=>{
+ const {createHandlers}=await import('./backend/dojo-billing/handler.mjs'),applied=[],lookups=[];
+ const o={id,checkout_id:checkout,price_cents:1199},s={id:'sub_abc',customer:'cus_abc',cycle:'MONTHLY',value:11.99};
+ const p={id:'pay_abc',customer:'cus_abc',subscription:s.id,checkoutSession:checkout,billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:'2026-11-11'};
+ const h=createHandlers({store:{lookup:async(env,cid,sid)=>{lookups.push([env,cid,sid]);return cid===checkout?o:null;},apply:async(...args)=>applied.push(args)},provider:async path=>path.startsWith('/payments/')?p:s,mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40)});
+ const response=await h.webhook(new Request('https://server/webhook',{method:'POST',headers:{'asaas-access-token':'a'.repeat(40)},body:JSON.stringify({id:'evt-checkout-on-payment',event:'PAYMENT_CONFIRMED',payment:{id:p.id}})}));
+ assert.equal(response.status,200);assert.deepEqual(lookups,[['sandbox',checkout,s.id]]);assert.equal(applied[0][5].revoked,false);
+});
