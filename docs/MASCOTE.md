@@ -13,7 +13,7 @@ O vídeo não bloqueia nota, XP ou saída. Há botões para pular e repetir, rep
 | Sem histórico ou início da prática | Pronto para aprender |
 | 3 dias seguidos | Feliz |
 | 7 dias seguidos | Forte e feliz |
-| 14 dias seguidos | Radiante |
+| 14 dias seguidos | Fortão e radiante, com braços e ombros bem musculosos |
 | 3 dias completos sem praticar | Desanimado, com saudade |
 | 7 dias completos sem praticar | Cansado |
 | 14 dias completos sem praticar | Nocauteado cartunesco, de costas, braços abertos e estrelas girando |
@@ -27,3 +27,7 @@ As ilustrações foram geradas com assistência de IA a partir do personagem do 
 54 testes automatizados aprovados, incluindo constância e viradas de mês, rotação persistente, bloqueio de armazenamento, falha de reprodução, pular e repetir, conclusão real do fluxo e preservação da pontuação. Conferência no navegador publicado: cinco vídeos com 400 × 400 pixels e duração de 2,5 segundos; revisão concluída pela interface com nota exibida e vídeo carregado; início sem rolagem horizontal em 390 e 320 pixels. A demonstração funciona sem gravar progresso.
 
 Essa conferência usa o navegador do computador com larguras de celular. O usuário pode confirmar a reprodução no iPhone real pelo app da Tela de Início.
+
+## Ajuste de 11 de novembro de 2026
+
+A pose dos 14 dias foi substituída pela versão musculosa `radiante-v2.webp`, mantendo o rosto, o kimono e um único risco dourado. O cálculo dos dias permanece igual. Os cinco testes do mascote passaram novamente. Essa revisão está preparada no código e no pacote; seu envio ao Netlify está pendente porque o controle do navegador não estava disponível na sessão.

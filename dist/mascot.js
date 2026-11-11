@@ -6,7 +6,7 @@
   pronto:{label:'Pronto para aprender',image:'assets/sensei-cartoon-limpo.png',message:'Seu sensei está com você. Vamos dar um pequeno passo hoje?'},
   feliz:{label:'Sensei feliz',image:'assets/sensei-comemorando-v1.png',message:'Três dias ou mais de constância. Cada pequeno passo faz diferença!'},
   forte:{label:'Sensei forte e feliz',image:base+'forte-v1.webp',message:'Uma semana de constância! Seu sensei comemora essa dedicação.'},
-  radiante:{label:'Sensei radiante',image:base+'radiante-v1.webp',message:'Duas semanas ou mais de constância! Essa alegria vem de aprender um pouco a cada dia.'},
+  radiante:{label:'Sensei fortão e radiante',image:base+'radiante-v2.webp',message:'Duas semanas ou mais de constância! Seu sensei comemora essa dedicação com muita força e alegria.'},
   triste:{label:'Sensei com saudade',image:base+'triste-v1.webp',message:'Seu sensei está com saudade. Uma atividade já é um recomeço.'},
   cansado:{label:'Sensei cansado',image:base+'cansado-v1.webp',message:'O dojo ficou quietinho. Volte no seu ritmo: uma atividade já muda o dia.'},
   nocauteado:{label:'Sensei sem energia',image:base+'nocauteado-v1.webp',message:'Seu sensei está recarregando. Que tal acordar o dojo com uma atividade?'}
