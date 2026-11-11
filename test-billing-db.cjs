@@ -1,5 +1,38 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 let PGlite;try{({PGlite}=require('@electric-sql/pglite'));}catch{({PGlite}=require('../auth-build/node_modules/@electric-sql/pglite'));}
+test('verified recurring webhooks activate the current month once, keep a future payment separate and survive an older refund',async()=>{
+ const {createHandlers}=await import('./backend/dojo-billing/handler.mjs'),{dateKey,paymentPeriod}=await import('./backend/dojo-billing/core.mjs');
+ const db=new PGlite();try{
+  await db.exec('create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create table public.dojo_profiles(id uuid primary key,active boolean);create table public.dojo_admins(user_id uuid primary key);create table public.dojo_guardians(user_id uuid,status text,consent_version text);create table public.dojo_privacy_requests(user_id uuid,status text);');
+  await db.exec(fs.readFileSync('./backend/billing.sql','utf8'));
+  const user='11111111-1111-4111-8111-111111111111',checkout='33333333-3333-4333-8333-333333333333',secret='sandbox-test-token-'.repeat(3);
+  await db.query('insert into auth.users values($1)',[user]);await db.query('insert into public.dojo_profiles values($1,true)',[user]);await db.query('insert into public.dojo_admins values($1)',[user]);
+  const order=(await db.query("select public.dojo_billing_reserve($1,'sandbox',1199,'2026-11-11.plus.1') as r",[user])).rows[0].r.order;
+  await db.query("update public.dojo_billing_orders set checkout_id=$1,state='pending' where id=$2",[checkout,order.id]);
+  const current=dateKey().slice(0,7)+'-01',anchor=new Date(current+'T12:00:00Z');
+  const month=offset=>new Date(Date.UTC(anchor.getUTCFullYear(),anchor.getUTCMonth()+offset,1,12)).toISOString().slice(0,10);
+  const subscription={id:'sub_monthly',customer:'cus_monthly',checkoutSession:checkout,cycle:'MONTHLY',value:11.99};
+  const payments=new Map([-1,0,1].map(offset=>['pay_month_'+(offset+1),{id:'pay_month_'+(offset+1),customer:subscription.customer,subscription:subscription.id,checkoutSession:checkout,billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:month(offset)}]));
+  const store={
+   lookup:async(env,cid,sid)=>(await db.query('select * from public.dojo_billing_orders where environment=$1 and (checkout_id=$2 or subscription_id=$3)',[env,cid,sid])).rows[0],
+   paymentRecord:async(o,id)=>(await db.query('select * from public.dojo_billing_payments where environment=$1 and order_id=$2 and payment_id=$3',[o.environment,o.id,id])).rows[0],
+   apply:async(o,env,event,kind,sub,snapshot,observed)=>db.query('select public.dojo_billing_apply($1,$2,$3,$4,$5,$6::jsonb,$7::timestamptz)',[o.id,env,event,kind,sub,snapshot?JSON.stringify(snapshot):null,observed])
+  };
+  const calls=[];const h=createHandlers({store,mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:secret,provider:async(path,method='GET')=>{
+   assert.equal(method,'GET');calls.push(path);if(path==='/subscriptions/sub_monthly')return subscription;
+   const payment=payments.get(path.replace('/payments/',''));assert.ok(payment,'only test payment resources may be fetched');return {...payment};
+  }});
+  const send=async(id,event,kind='PAYMENT_CONFIRMED')=>{const response=await h.webhook(new Request('https://server/webhook',{method:'POST',headers:{'asaas-access-token':secret},body:JSON.stringify({id:event,event:kind,payment:{id}})}));assert.equal(response.status,200);};
+  const status=async(env='sandbox')=>(await db.query('select public.dojo_billing_status($1,$2) as r',[user,env])).rows[0].r;
+  await send('pay_month_0','old-month');assert.equal((await status()).active,false,'an expired paid month does not activate today');
+  await send('pay_month_1','renewal-current');let state=await status();assert.equal(state.active,true);assert.equal(new Date(state.periodEnd).toISOString(),paymentPeriod(current).end);
+  await send('pay_month_1','renewal-current');await send('pay_month_1','renewal-current-retry');state=await status();assert.equal(state.payments.length,2);assert.equal(new Date(state.periodEnd).toISOString(),paymentPeriod(current).end,'duplicate events do not add an extra month');
+  await send('pay_month_2','renewal-future');state=await status();assert.equal(state.payments.length,3);assert.equal(new Date(state.periodEnd).toISOString(),paymentPeriod(current).end,'a prepaid future month is stored without extending the current period');
+  payments.get('pay_month_0').status='REFUNDED';await send('pay_month_0','refund-old-month','PAYMENT_REFUNDED');state=await status();assert.equal(state.active,true,'refund of an older month does not revoke a different paid current month');assert.equal(new Date(state.periodEnd).toISOString(),paymentPeriod(current).end);
+  assert.equal((await status('production')).active,false);assert.ok(calls.length>0);
+  assert.equal((await db.query("select count(*)::int as n from public.dojo_billing_events where environment='sandbox'")).rows[0].n,5,'replayed event ID is recorded once');
+ }finally{await db.close();}
+});
 test('Postgres protects paid periods, rejects client writes, deduplicates renewals and preserves paid access on cancellation',async()=>{
  const db=new PGlite();try{
   await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create table public.dojo_profiles(id uuid primary key,active boolean);create table public.dojo_admins(user_id uuid primary key);create table public.dojo_guardians(user_id uuid,status text,consent_version text);create table public.dojo_privacy_requests(user_id uuid,status text);`);

@@ -84,6 +84,12 @@ A versão 2026-11-11.6 lê ASAAS_WEBHOOK_TOKEN em cada requisição. A recusa co
 
 Para testar sem gerar cobrança, fazer POST com o cabeçalho asaas-access-token contendo o token original e o corpo {"id":"san-dojo-auth-check","event":"SAN_DOJO_AUTH_CHECK"}. Com autenticação válida, retorna HTTP 200 e {"received":true}, sem consultar o Asaas ou o banco. Isso testa apenas autenticação; depois é necessário verificar uma entrega real do Asaas com HTTP 200. Não enviar valores dos segredos pelo chat nem copiá-los para o repositório.
 
+## Resultado dos testes de renovação
+
+Em 11/11/2026, o usuário informou HTTP 200 para PAYMENT_REFUNDED no Asaas e resultado true/true/false na consulta de leitura: evento de estorno presente, pagamento estornado/revogado presente e nenhum benefício atual desse pedido. Uma nova contratação Sandbox aparece ativa até 11/12/2026. Na assinatura nova, o painel mostra próxima cobrança em 11/12/2026, mas apenas a de 11/11 na tabela. A tentativa de imprimir carnê foi bloqueada com a mensagem de que esse recurso do painel é apenas para boleto. Não alterar a forma de pagamento para contornar essa limitação. O teste de segunda mensalidade no provedor permanece pendente; não foi concluído por esses resultados. A rotação do token exposto em captura foi orientada e ainda precisa de confirmação.
+
+Os 26 testes locais incluem o fluxo de webhooks com recursos simulados do provedor e PostgreSQL via PGlite: um período expirado não libera acesso atual; a segunda mensalidade válida libera somente seu período; eventos repetidos não acrescentam meses; um período futuro pago permanece separado; estorno do mês anterior preserva um mês atual diferente já pago. Isso valida as regras do app, sem substituir uma renovação efetiva no Asaas Sandbox. Não há mudança de código de produção nesta etapa.
+
 ## Fontes oficiais consultadas
 
 - <https://docs.asaas.com/docs/checkout-com-assinatura-recorrente>
