@@ -56,9 +56,17 @@ test('subscription screen shows price, recurring consent, preparation and cancel
 });
 test('browser entitlement is short-lived, tied to the signed-in account and cleared on service failure',async()=>{
  let tick=1000,fail=false,listener;const user={id:'user-a'},G={setPremiumProvider(fn){this.provider=fn;}};
- const A={user,canStudy:()=>true,ready:Promise.resolve(),client:{functions:{invoke:async()=>fail?{error:true}:{data:{active:true,available:true,serverNow:'2026-11-11T12:00:00Z',periodEnd:'2026-12-11T03:00:00Z'}}}}};
+ const A={user,canStudy:()=>true,ready:Promise.resolve(),client:{functions:{invoke:async()=>fail?{error:true}:{data:{mode:'sandbox',active:true,available:true,serverNow:'2026-11-11T12:00:00Z',periodEnd:'2026-12-11T03:00:00Z'}}}}};
  const context=vm.createContext({window:{SAN_DOJO_CONFIG:{paymentsEnabled:true},addEventListener:()=>{},dispatchEvent:()=>{}},DojoAccounts:A,DojoGame:G,performance:{now:()=>tick},Event:class{},document:{addEventListener:(name,fn)=>{if(name==='visibilitychange')listener=fn;},visibilityState:'visible'},setInterval:()=>{},URL});
  vm.runInContext(fs.readFileSync('./dist/subscription.js','utf8')+';this.P=DojoPayments;',context);
  await context.P.refresh();assert.equal(context.P.active(),true);tick+=300001;assert.equal(context.P.active(),false);
  await context.P.refresh();A.user={id:'user-b'};assert.equal(context.P.active(),false);A.user=user;fail=true;await context.P.refresh();assert.equal(context.P.active(),false);
+});
+test('sandbox UI makes no requests for students and refuses production entitlements',async()=>{
+ let calls=0,admin=false;
+ const A={user:{id:'admin'},canManage:()=>admin,canStudy:()=>true,ready:Promise.resolve(),client:{functions:{invoke:async()=>{calls++;return {data:{mode:'production',active:true,available:true,serverNow:new Date().toISOString(),periodEnd:'2099-01-01T00:00:00Z'}};}}}};
+ const context=vm.createContext({window:{SAN_DOJO_CONFIG:{paymentsEnabled:true,paymentsEnvironment:'sandbox',paymentsAdminOnly:true},addEventListener:()=>{},dispatchEvent:()=>{}},DojoAccounts:A,DojoGame:{setPremiumProvider(){}},DojoSubscriptionUI:require('./dist/subscription-ui.js'),performance:{now:()=>1000},Event:class{},document:{addEventListener:()=>{},visibilityState:'visible'},setInterval:()=>{},URL});
+ vm.runInContext(fs.readFileSync('./dist/subscription.js','utf8')+';this.P=DojoPayments;',context);
+ await context.P.refresh();assert.equal(calls,0);assert.equal(context.P.active(),false);
+ admin=true;await context.P.refresh();assert.ok(calls>0);assert.equal(context.P.active(),false);assert.match(context.P.page(),/ambiente de assinaturas está diferente/);
 });

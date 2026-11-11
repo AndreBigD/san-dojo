@@ -40,7 +40,7 @@ O RPC de reserva impede duas contratações abertas da mesma conta. Se a criaç�
    - `SUBSCRIPTION_CREATED`, `SUBSCRIPTION_UPDATED`, `SUBSCRIPTION_INACTIVATED`, `SUBSCRIPTION_DELETED`
    - `PAYMENT_CREATED`, `PAYMENT_UPDATED`, `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_DELETED`, `PAYMENT_RESTORED`
    - `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`, `PAYMENT_REFUND_IN_PROGRESS`, `PAYMENT_CHARGEBACK_REQUESTED`, `PAYMENT_CHARGEBACK_DISPUTE`, `PAYMENT_AWAITING_CHARGEBACK_REVERSAL`, `PAYMENT_CREDIT_CARD_CAPTURE_REFUSED`
-7. Ativar `paymentsEnabled:true` no app e publicar o ZIP no projeto **existente** `sandojokarate` do Netlify. Não usar uma nova publicação genérica que crie outro site.
+7. Publicar o pacote de testes no projeto **existente** `sandojokarate` do Netlify. O pacote usa `paymentsEnabled:true`, `paymentsEnvironment:'sandbox'` e `paymentsAdminOnly:true`: somente o administrador consulta a integração, e a tela recusa status e checkout de produção. Não usar uma nova publicação genérica que crie outro site.
 8. Entrar como administrador. Conferir o rótulo **AMBIENTE DE TESTE**. Testar contratação, pagamento pendente, confirmação, notificação duplicada, mensalidade seguinte, cancelamento, estorno, falha de conexão e retorno ao plano gratuito após vencer.
 
 ## Critérios antes de cobrar de verdade
@@ -49,7 +49,7 @@ Além dos testes locais, conferir no Sandbox real: formato do checkout e da cobr
 
 Revisar os termos preparados, o atendimento de reembolsos, os dados comerciais exigidos pelo Asaas e o processo de retenção/exclusão dos registros financeiros. A migração impede apagar diretamente uma conta que ainda tenha pedidos financeiros: cancelar a recorrência e avaliar anonimização/retenção antes da exclusão. Isso não deve deixar uma cobrança ativa após pedido de encerramento.
 
-Após homologação e autorização para ativação: configurar credenciais e webhook **de produção**, trocar `ASAAS_MODE=production` e manter o mesmo preço. Nunca reutilizar o token de webhook do Sandbox em produção. Alterar textos de “em preparação” nos termos e na privacidade quando a integração estiver ativa. Só então anunciar a assinatura.
+Após homologação e autorização para ativação: configurar credenciais e webhook **de produção**, trocar `ASAAS_MODE=production`, definir `paymentsEnvironment:'production'` e `paymentsAdminOnly:false` no app e manter o mesmo preço. Nunca reutilizar o token de webhook do Sandbox em produção. Alterar textos de “em preparação” nos termos e na privacidade quando a integração estiver ativa. Só então anunciar a assinatura.
 
 Para pausar novas vendas, usar `ASAAS_CHECKOUT_ENABLED=false`. Manter as funções, credenciais de produção, webhooks e `paymentsEnabled:true` funcionando para assinantes consultarem e cancelarem. Não desativar toda a integração com clientes ativos.
 

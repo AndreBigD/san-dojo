@@ -1,6 +1,7 @@
 const DojoPayments=(()=>{
  let status={active:false,available:false},verifiedAt=0,serverAt=0,owner=null,busy=false,lastMount=-Infinity;
- const enabled=()=>window.SAN_DOJO_CONFIG?.paymentsEnabled===true;
+ const expectedMode=()=>window.SAN_DOJO_CONFIG?.paymentsEnvironment==='production'?'production':'sandbox';
+ const enabled=()=>window.SAN_DOJO_CONFIG?.paymentsEnabled===true&&(!window.SAN_DOJO_CONFIG?.paymentsAdminOnly||DojoAccounts.canManage());
  const reset=()=>{status={active:false,available:false};verifiedAt=0;serverAt=0;owner=null;};
  function active(){if(!enabled()||!DojoAccounts.user||owner!==DojoAccounts.user.id||!DojoAccounts.canStudy()||status.active!==true)return false;const elapsed=performance.now()-verifiedAt;return elapsed>=0&&elapsed<300000&&serverAt+elapsed<Date.parse(status.periodEnd);}
  async function request(body){
@@ -11,7 +12,7 @@ const DojoPayments=(()=>{
  }
  async function refresh(){
   const user=DojoAccounts.user?.id;if(!enabled()||!user){reset();return;}
-  try{const data=await request({action:'status'});if(DojoAccounts.user?.id!==user)return reset();status=data;owner=user;verifiedAt=performance.now();serverAt=Date.parse(data.serverNow);if(!Number.isFinite(serverAt))reset();}
+  try{const data=await request({action:'status'});if(DojoAccounts.user?.id!==user)return reset();if(data.mode!==expectedMode())throw Error('O ambiente de assinaturas está diferente do esperado. Confira a configuração antes de contratar.');status=data;owner=user;verifiedAt=performance.now();serverAt=Date.parse(data.serverNow);if(!Number.isFinite(serverAt))reset();}
   catch(error){reset();status.message=error.message;}
   window.dispatchEvent(new Event('dojo-subscription-status'));
  }
@@ -20,7 +21,7 @@ const DojoPayments=(()=>{
  function message(text){const el=document.getElementById('subscription-message');if(el)el.textContent=text;}
  async function checkout(form){
   if(busy||!form.elements.confirm.checked)return;busy=true;const b=form.querySelector('button');b.disabled=true;message('Preparando o pagamento…');
-  try{const data=await request({action:'checkout',confirm:true,terms:DojoSubscriptionUI.terms,priceCents:1199});const url=new URL(data.url);if(url.protocol!=='https:'||!['asaas.com','sandbox.asaas.com'].includes(url.hostname)||url.pathname!=='/checkoutSession/show')throw Error('Endereço de pagamento inválido.');location.assign(url.href);}
+  try{if(!status.available||status.mode!==expectedMode()||owner!==DojoAccounts.user?.id)throw Error('Atualize a situação da assinatura antes de continuar.');const data=await request({action:'checkout',confirm:true,terms:DojoSubscriptionUI.terms,priceCents:1199});const url=new URL(data.url),host=expectedMode()==='sandbox'?'sandbox.asaas.com':'asaas.com';if(data.mode!==expectedMode()||url.protocol!=='https:'||url.hostname!==host||url.pathname!=='/checkoutSession/show')throw Error('Endereço ou ambiente de pagamento inválido.');location.assign(url.href);}
   catch(error){message(error.message);b.disabled=false;}finally{busy=false;}
  }
  async function cancel(){
