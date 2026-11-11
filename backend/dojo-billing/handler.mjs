@@ -1,6 +1,6 @@
 import {PLAN,billingMode,eligible,checkoutPayload,checkoutURL,paymentSnapshot,recordedSnapshot,subscriptionMatches,dateKey,tokenMatches} from './core.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
-export function createHandlers({store,getUser,provider,mode:rawMode,site,webhookToken,imageBase64,salesEnabled=false,apiKeyConfigured=false,now=()=>new Date(),report=()=>{}}){
+export function createHandlers({store,getUser,provider,mode:rawMode,site,webhookToken,getWebhookToken=()=>webhookToken,imageBase64,salesEnabled=false,apiKeyConfigured=false,now=()=>new Date(),report=()=>{}}){
  const mode=billingMode(rawMode),origin=new URL(site).origin;
  // Best-effort per-instance backoff only. Entitlements and idempotency remain in Postgres.
  const recovering=new Map();
@@ -146,8 +146,18 @@ export function createHandlers({store,getUser,provider,mode:rawMode,site,webhook
   }catch(error){return json({error:error.status&&error.status<500?error.message:'Não foi possível concluir agora. Atualize a situação antes de tentar novamente.'},error.status&&error.status<500?error.status:503,true);}
  }
  async function webhook(req){
+  if(req.method==='GET'&&new URL(req.url).pathname.endsWith('/health')){const token=getWebhookToken();return json({service:'san-dojo-webhook',version:'2026-11-11.6',environment:mode,webhookTokenConfigured:typeof token==='string'&&token.length>=32});}
   if(req.method!=='POST')return json({error:'Method not allowed'},405);
-  if(mode==='disabled'||!await tokenMatches(req.headers.get('asaas-access-token'),webhookToken))return json({error:'Unauthorized'},401);
+  const expected=getWebhookToken(),actual=req.headers.get('asaas-access-token');
+  // Fixed reason codes reveal neither tokens, lengths, hashes nor request/header contents.
+  const unauthorized=reason=>json({error:'Unauthorized',source:'san-dojo-webhook',reason},401);
+  if(mode==='disabled')return unauthorized('ENVIRONMENT_DISABLED');
+  if(typeof expected!=='string'||expected.length<32)return unauthorized('TOKEN_NOT_CONFIGURED');
+  if(!actual)return unauthorized('HEADER_MISSING');
+  if(!await tokenMatches(actual,expected)){
+   const format=expected!==expected.trim()||/^(["']).*\1$/.test(expected);
+   return unauthorized(format?'STORED_TOKEN_FORMAT':/^Bearer\s/i.test(actual)?'HEADER_BEARER_PREFIX':'TOKEN_MISMATCH');
+  }
   try{
    const event=await body(req);if(typeof event.id!=='string'||event.id.length>200||typeof event.event!=='string')throw fail(400,'Invalid event');
    const observed=now().toISOString();let o,sub=null,snapshot=null,kind=event.event;

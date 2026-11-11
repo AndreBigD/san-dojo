@@ -213,3 +213,25 @@ test('manual subscription refresh sends reconciliation intent while background r
  vm.runInContext(fs.readFileSync('./dist/subscription.js','utf8')+';this.P=DojoPayments;',context);
  await context.P.refresh();assert.equal(bodies.at(-1).reconcile,false);await context.P.refresh(true);assert.equal(bodies.at(-1).reconcile,true);
 });
+
+test('webhook authentication diagnostics distinguish missing, mismatched and misformatted tokens without exposing secrets',async()=>{
+ const {createHandlers}=await import('./backend/dojo-billing/handler.mjs');let token='secret-value-'.repeat(4),calls=0;
+ const h=createHandlers({store:new Proxy({},{get(){calls++;throw Error('must not read database');}}),provider:async()=>{calls++;throw Error('must not call provider');},mode:'sandbox',site:'https://sandojokarate.com.br/',getWebhookToken:()=>token});
+ const request=(header)=>new Request('https://server/webhook',{method:'POST',headers:header?{'asaas-access-token':header}:{},body:JSON.stringify({id:'safe-auth-check',event:'SAN_DOJO_AUTH_CHECK'})});
+ for(const [header,reason]of [[null,'HEADER_MISSING'],['wrong','TOKEN_MISMATCH'],['Bearer '+token,'HEADER_BEARER_PREFIX']]){
+  const r=await h.webhook(request(header)),data=await r.json();assert.equal(r.status,401);assert.equal(data.reason,reason);assert.equal(data.source,'san-dojo-webhook');assert.ok(!JSON.stringify(data).includes(token));
+ }
+ token='"'+'private-value-'.repeat(4)+'"';let r=await h.webhook(request('other'));assert.equal((await r.json()).reason,'STORED_TOKEN_FORMAT');
+ token='short';r=await h.webhook(request('other'));assert.equal((await r.json()).reason,'TOKEN_NOT_CONFIGURED');
+ token='new-private-token-'.repeat(3);r=await h.webhook(request(token));assert.equal(r.status,200);assert.deepEqual(await r.json(),{received:true});assert.equal(calls,0,'the authentication check never reads or changes billing data');
+ token='replacement-token-'.repeat(3);r=await h.webhook(request(token));assert.equal(r.status,200,'reads the current token for each request');
+});
+
+test('webhook public health reports release and presence only, while disabled environments still reject a correct token',async()=>{
+ const {createHandlers}=await import('./backend/dojo-billing/handler.mjs');const secret='private-token-'.repeat(4);
+ const h=createHandlers({store:{},mode:'disabled',site:'https://sandojokarate.com.br/',webhookToken:secret});
+ const r=await h.webhook(new Request('https://server/webhook/health')),data=await r.json();assert.equal(r.status,200);assert.equal(data.environment,'disabled');assert.equal(data.version,'2026-11-11.6');assert.equal(data.webhookTokenConfigured,true);assert.ok(!JSON.stringify(data).includes(secret));
+ assert.deepEqual(Object.keys(data).sort(),['service','version','environment','webhookTokenConfigured'].sort());
+ const denied=await h.webhook(new Request('https://server/webhook',{method:'POST',headers:{'asaas-access-token':secret},body:'{}'}));assert.equal(denied.status,401);assert.equal((await denied.json()).reason,'ENVIRONMENT_DISABLED');
+ assert.equal((await h.webhook(new Request('https://server/webhook'))).status,405);
+});
