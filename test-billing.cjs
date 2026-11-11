@@ -38,7 +38,7 @@ test('webhooks verify token and fetch current payment and subscription; callback
  const o={id,checkout_id:checkout,price_cents:1199};
  const s={id:'sub_abc',customer:'cus_abc',checkoutSession:checkout,cycle:'MONTHLY',value:11.99};
  const p={id:'pay_abc',customer:'cus_abc',subscription:s.id,billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:'2026-11-11'};
- const h=createHandlers({store:{lookup:async()=>o,apply:async(...args)=>applied.push(args)},getUser:async()=>null,provider:async path=>{calls.push(path);return path.startsWith('/payments/')?p:s;},mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40),imageBase64:'logo'});
+ const h=createHandlers({store:{lookup:async()=>o,paymentRecord:async()=>null,apply:async(...args)=>applied.push(args)},getUser:async()=>null,provider:async path=>{calls.push(path);return path.startsWith('/payments/')?p:s;},mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40),imageBase64:'logo'});
  const req=(event,token='a'.repeat(40))=>new Request('https://server/webhook',{method:'POST',headers:{'asaas-access-token':token},body:JSON.stringify(event)});
  assert.equal((await h.webhook(req({id:'evt1',event:'PAYMENT_CONFIRMED',payment:{id:p.id}},'wrong'))).status,401);assert.equal(calls.length,0);
  assert.equal((await h.webhook(req({id:'evt1',event:'PAYMENT_CONFIRMED',payment:{id:p.id,value:0,status:'REFUNDED'}}))).status,200);
@@ -100,7 +100,9 @@ async function recoveryHarness({mode='sandbox',admin=true,active=false,providerE
  const subscription={id:'sub_abc',customer:'cus_abc',cycle:'MONTHLY',value:11.99,...subscriptionPatch};
  const payment={id:'pay_abc',customer:'cus_abc',subscription:'sub_abc',billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:'2026-11-11',...paymentPatch};
  let clock=new Date('2026-11-11T16:00:00Z');const calls=[],applied=[],lookups=[],reports=[];
- const store={access:async()=>({admin}),status:async()=>({active,serverNow:clock.toISOString(),order:{id,state:order.state},payments:applied.map(a=>a[5]).filter(Boolean)}),ownOrder:async(user,env,oid)=>{lookups.push([user,env,oid]);return user===id&&env===mode&&oid===id?order:null;},apply:async(...a)=>{applied.push(a);order.subscription_id=a[4];order.state='active';if(a[5])active=!a[5].revoked;}};
+ const records=new Map(),snapshotRecord=s=>({payment_id:s.payment,order_id:id,amount_cents:s.amount,period_start:s.start,period_end:s.end});
+ if(active){const {paymentPeriod}=await core(),period=paymentPeriod(payment.dueDate);order.subscription_id=payment.subscription;order.state='active';records.set(payment.id,{payment:payment.id,amount:1199,status:'CONFIRMED',revoked:false,start:period.start,end:period.end});}
+ const store={access:async()=>({admin}),status:async()=>({active,serverNow:clock.toISOString(),order:{id,state:order.state},payments:[...records.values()]}),ownOrder:async(user,env,oid)=>{lookups.push([user,env,oid]);return user===id&&env===mode&&oid===id?order:null;},currentPayments:async(user,env)=>user===id&&env===mode?[...records.values()].filter(s=>!s.revoked).map(s=>({order,record:snapshotRecord(s)})):[],paymentRecord:async(o,pid)=>records.has(pid)?snapshotRecord(records.get(pid)):null,apply:async(...a)=>{applied.push(a);order.subscription_id=a[4];order.state='active';if(a[5]){records.set(a[5].payment,a[5]);active=!a[5].revoked;}}};
  let subscriptionPage=0;
  const provider=async(path,method='GET')=>{
   calls.push({path,method});if(providerError)throw providerError;
@@ -121,7 +123,8 @@ test('refresh recovers a missing webhook for the signed-in order using GET only 
  const query=new URL('https://server'+T.calls[0].path).searchParams;
  assert.equal(query.get('checkoutSession'),checkout);assert.equal(query.get('dueDate[ge]'),'2026-10-10');assert.equal(query.get('dueDate[le]'),'2026-11-11');
  assert.ok(T.calls.every(c=>c.method==='GET'));assert.equal(T.calls.length,3);
- await T.h.billing(T.request());assert.equal(T.calls.length,3,'an active entitlement uses the ledger, rather than polling the provider');
+ await T.h.billing(T.request());assert.equal(T.calls.length,4,'Sandbox also rechecks active payments for the already-published test UI');
+ await T.h.billing(T.request());assert.equal(T.calls.length,4,'repeated active refreshes share the one-minute backoff');
 });
 
 test('pending, refunded and invalid payments never become paid access during recovery',async()=>{
@@ -178,7 +181,35 @@ test('payment webhook can bind its first payment when checkoutSession is only on
  const {createHandlers}=await import('./backend/dojo-billing/handler.mjs'),applied=[],lookups=[];
  const o={id,checkout_id:checkout,price_cents:1199},s={id:'sub_abc',customer:'cus_abc',cycle:'MONTHLY',value:11.99};
  const p={id:'pay_abc',customer:'cus_abc',subscription:s.id,checkoutSession:checkout,billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:'2026-11-11'};
- const h=createHandlers({store:{lookup:async(env,cid,sid)=>{lookups.push([env,cid,sid]);return cid===checkout?o:null;},apply:async(...args)=>applied.push(args)},provider:async path=>path.startsWith('/payments/')?p:s,mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40)});
+ const h=createHandlers({store:{lookup:async(env,cid,sid)=>{lookups.push([env,cid,sid]);return cid===checkout?o:null;},paymentRecord:async()=>null,apply:async(...args)=>applied.push(args)},provider:async path=>path.startsWith('/payments/')?p:s,mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40)});
  const response=await h.webhook(new Request('https://server/webhook',{method:'POST',headers:{'asaas-access-token':'a'.repeat(40)},body:JSON.stringify({id:'evt-checkout-on-payment',event:'PAYMENT_CONFIRMED',payment:{id:p.id}})}));
  assert.equal(response.status,200);assert.deepEqual(lookups,[['sandbox',checkout,s.id]]);assert.equal(applied[0][5].revoked,false);
+});
+
+test('recorded payment refresh suspends refunded access without creating or extending periods',async()=>{
+ const C=await core(),o={id,subscription_id:'sub_abc',checkout_id:checkout,price_cents:1199},record={order_id:id,payment_id:'pay_abc',amount_cents:1199,period_start:'2026-11-11T03:00:00Z',period_end:'2026-12-11T03:00:00Z'};
+ const p={id:'pay_abc',subscription:'sub_abc',value:11.99,billingType:'CREDIT_CARD',status:'REFUNDED',dueDate:'2099-01-01'};
+ const snapshot=C.recordedSnapshot(p,o,record);assert.equal(snapshot.revoked,true);assert.equal(snapshot.end,record.period_end);assert.equal(snapshot.start,record.period_start);
+ for(const patch of [{id:'pay_other'},{subscription:'sub_other'},{value:1},{billingType:'PIX'},{checkoutSession:'another'}])assert.throws(()=>C.recordedSnapshot({...p,...patch},o,record));
+ assert.throws(()=>C.recordedSnapshot(p,o,{...record,order_id:'other'}));assert.throws(()=>C.recordedSnapshot(p,o,null));
+});
+
+test('active Sandbox refresh revokes a missing refund notification and fails closed on provider errors',async()=>{
+ const T=await recoveryHarness({active:true,paymentPatch:{status:'REFUNDED'}}),value=await (await T.h.billing(T.request())).json();
+ assert.equal(value.active,false);assert.equal(value.sync,'benefit_suspended');assert.equal(T.calls.length,1);assert.equal(T.calls[0].path,'/payments/pay_abc');assert.equal(T.calls[0].method,'GET');assert.equal(T.applied[0][5].revoked,true);
+ const paid=await recoveryHarness({active:true}),stillPaid=await (await paid.h.billing(paid.request())).json();assert.equal(stillPaid.active,true);assert.equal(stillPaid.sync,'rechecked');
+ const failed=await recoveryHarness({active:true,providerError:Error('private response')}),unverified=await (await failed.h.billing(failed.request())).json();assert.equal(unverified.active,false);assert.equal(unverified.verificationFailed,true);assert.equal(failed.applied.length,0);assert.ok(!JSON.stringify(unverified).includes('private response'));
+});
+
+test('production background status uses the ledger and explicit refresh rechecks only the signed-in account',async()=>{
+ const T=await recoveryHarness({mode:'production',admin:false,active:true,paymentPatch:{status:'REFUNDED'}});
+ let value=await (await T.h.billing(T.request())).json();assert.equal(value.active,true);assert.equal(T.calls.length,0);
+ value=await (await T.h.billing(T.request({reconcile:true,userId:'attacker',paymentId:'pay_other'}))).json();assert.equal(value.active,false);assert.equal(T.calls[0].path,'/payments/pay_abc');
+});
+
+test('manual subscription refresh sends reconciliation intent while background refresh does not',async()=>{
+ const bodies=[],A={user:{id:'owner'},canStudy:()=>true,ready:Promise.resolve(),client:{functions:{invoke:async(name,{body})=>{assert.equal(name,'dojo-billing');bodies.push(body);return {data:{mode:'sandbox',active:false,serverNow:new Date().toISOString()}};}}}};
+ const context=vm.createContext({window:{SAN_DOJO_CONFIG:{paymentsEnabled:true},addEventListener(){},dispatchEvent(){}},DojoAccounts:A,DojoGame:{setPremiumProvider(){}},performance:{now:()=>1000},Event:class{},document:{addEventListener(){},visibilityState:'visible'},setInterval(){},URL});
+ vm.runInContext(fs.readFileSync('./dist/subscription.js','utf8')+';this.P=DojoPayments;',context);
+ await context.P.refresh();assert.equal(bodies.at(-1).reconcile,false);await context.P.refresh(true);assert.equal(bodies.at(-1).reconcile,true);
 });

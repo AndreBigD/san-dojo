@@ -1,4 +1,4 @@
-import {PLAN,billingMode,eligible,checkoutPayload,checkoutURL,paymentSnapshot,subscriptionMatches,dateKey,tokenMatches} from './core.mjs';
+import {PLAN,billingMode,eligible,checkoutPayload,checkoutURL,paymentSnapshot,recordedSnapshot,subscriptionMatches,dateKey,tokenMatches} from './core.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 export function createHandlers({store,getUser,provider,mode:rawMode,site,webhookToken,imageBase64,salesEnabled=false,apiKeyConfigured=false,now=()=>new Date(),report=()=>{}}){
  const mode=billingMode(rawMode),origin=new URL(site).origin;
@@ -66,19 +66,31 @@ export function createHandlers({store,getUser,provider,mode:rawMode,site,webhook
   }
   return checked.length?{sync:'checked',message:'A cobrança foi localizada no Asaas, mas ainda não há período pago confirmado. Não contrate novamente.'}:{sync:'waiting',message:'O Asaas ainda não disponibilizou uma cobrança desta contratação. Aguarde um minuto e atualize a situação; não contrate novamente.'};
  }
- async function recoverOnce(o){
-  const key=mode+':'+o.id,t=now().getTime(),prior=recovering.get(key);
+ async function checkOnce(key,work){
+  const t=now().getTime(),prior=recovering.get(key);
   if(prior&&t-prior.at<60000)return prior.promise;
   if(recovering.size>=1000)recovering.delete(recovering.keys().next().value);
-  const promise=recover(o).catch(error=>{
+  const promise=work().catch(error=>{
    const denied=[401,403].includes(error.status),code=denied?'provider_access_denied':error.status?'provider_unavailable':error.syncCode==='subscription_lookup_limit'?'subscription_lookup_limit':'payment_verification_failed';report(code);
-   return {sync:code,message:denied?'O Asaas recusou a consulta do pagamento. André precisa conferir a chave e as permissões da integração; não contrate novamente.':code==='subscription_lookup_limit'?'A recuperação atingiu o limite de consulta. André precisa conferir o vínculo da assinatura no Asaas; não contrate novamente.':'Não foi possível conferir a cobrança no Asaas agora. Tente atualizar a situação em um minuto. Se persistir, fale com André; não contrate novamente.'};
+   return {sync:code,verificationFailed:true,message:denied?'O Asaas recusou a consulta do pagamento. André precisa conferir a chave e as permissões da integração; não contrate novamente.':code==='subscription_lookup_limit'?'A recuperação atingiu o limite de consulta. André precisa conferir o vínculo da assinatura no Asaas; não contrate novamente.':'Não foi possível conferir a cobrança no Asaas agora. Tente atualizar a situação em um minuto. Se persistir, fale com André; não contrate novamente.'};
   });
   recovering.set(key,{at:t,promise});return promise;
  }
+ const recoverOnce=o=>checkOnce(mode+':'+o.id,()=>recover(o));
+ async function recheckActive(user){
+  const observed=now().toISOString(),items=await store.currentPayments(user,mode,observed);
+  if(!Array.isArray(items)||!items.length||items.length>10)throw Error('Invalid active payment records');
+  const checked=await Promise.all(items.map(async({order,record})=>{
+   if(order.user_id!==user||order.environment!==mode||!/^pay_[A-Za-z0-9_]+$/.test(record.payment_id||''))throw Error('Unrelated active record');
+   const payment=await provider('/payments/'+record.payment_id);
+   return {order,snapshot:recordedSnapshot(payment,order,record)};
+  }));
+  for(const {order,snapshot} of checked)await store.apply(order,mode,'recheck:'+crypto.randomUUID(),'PAYMENT_RECHECKED',order.subscription_id,snapshot,observed);
+  return {sync:'rechecked',message:'O pagamento continua confirmado no Asaas. A energia ilimitada permanece ativa.'};
+ }
  async function billing(req){
   // Public health reports configuration presence only; never reads users, payments or provider data.
-  if(req.method==='GET'&&new URL(req.url).pathname.endsWith('/health'))return json({service:'san-dojo-billing',version:'2026-11-11.4',environment:mode,modeConfigured:mode!=='disabled',modeNeedsFormatting:mode==='disabled'&&String(rawMode||'').trim().toLowerCase()==='sandbox',checkoutEnabled:salesEnabled,apiKeyConfigured,webhookTokenConfigured:typeof webhookToken==='string'&&webhookToken.length>=32});
+  if(req.method==='GET'&&new URL(req.url).pathname.endsWith('/health'))return json({service:'san-dojo-billing',version:'2026-11-11.5',environment:mode,modeConfigured:mode!=='disabled',modeNeedsFormatting:mode==='disabled'&&String(rawMode||'').trim().toLowerCase()==='sandbox',checkoutEnabled:salesEnabled,apiKeyConfigured,webhookTokenConfigured:typeof webhookToken==='string'&&webhookToken.length>=32});
   if(req.headers.get('origin')!==origin)return json({error:'Origem não autorizada.'},403);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'}});
   if(req.method!=='POST')return json({error:'Método não permitido.'},405,true);
@@ -90,7 +102,12 @@ export function createHandlers({store,getUser,provider,mode:rawMode,site,webhook
    if(mode==='sandbox'&&!access.admin)throw fail(403,'Os testes de assinatura estão disponíveis apenas ao administrador.');
    if(input.action==='status'){
     let status=await store.status(user.id,mode),sync={};
-    if(!status.active&&status.order){
+    // Sandbox compatibility also rechecks the already-published test UI; production requires the explicit refresh flag.
+    if(status.active&&(input.reconcile===true||mode==='sandbox')){
+     sync=await checkOnce(mode+':active:'+user.id,()=>recheckActive(user.id));status=await store.status(user.id,mode);
+     if(sync.verificationFailed)status={...status,active:false};
+     else if(!status.active)sync={sync:'benefit_suspended',message:'A cobrança foi conferida no Asaas. O benefício está suspenso e a energia voltou ao plano gratuito.'};
+    }else if(!status.active&&status.order){
      const o=await store.ownOrder(user.id,mode,status.order.id);
      if(o){sync=await recoverOnce(o);status=await store.status(user.id,mode);if(status.active)sync={sync:'recovered',message:'Confirmação recuperada. Sua energia ilimitada já está ativa.'};}
     }
@@ -137,10 +154,16 @@ export function createHandlers({store,getUser,provider,mode:rawMode,site,webhook
    if(kind.startsWith('PAYMENT_')){
     const id=event.payment?.id;if(!/^pay_[A-Za-z0-9_]+$/.test(id||''))throw fail(400,'Invalid payment');
     const payment=await provider('/payments/'+id);
+    if(payment.id!==id)throw fail(400,'Invalid payment resource');
     if(!/^sub_[A-Za-z0-9_]+$/.test(payment.subscription||''))return json({received:true});
-    const subscription=await provider('/subscriptions/'+payment.subscription);
-    o=await store.lookup(mode,payment.checkoutSession||subscription.checkoutSession,subscription.id);if(!o)return json({received:true});
-    snapshot=paymentSnapshot(payment,subscription,o);sub=subscription.id;
+    o=await store.lookup(mode,payment.checkoutSession,payment.subscription);
+    const record=o?await store.paymentRecord(o,payment.id):null;
+    if(record){snapshot=recordedSnapshot(payment,o,record);sub=payment.subscription;}
+    else{
+     const subscription=await provider('/subscriptions/'+payment.subscription);
+     o??=await store.lookup(mode,payment.checkoutSession||subscription.checkoutSession,subscription.id);if(!o)return json({received:true});
+     snapshot=paymentSnapshot(payment,subscription,o);sub=subscription.id;
+    }
    }else if(kind.startsWith('SUBSCRIPTION_')){
     const id=event.subscription?.id;if(!/^sub_[A-Za-z0-9_]+$/.test(id||''))throw fail(400,'Invalid subscription');
     o=await store.lookup(mode,null,id);

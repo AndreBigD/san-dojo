@@ -29,6 +29,14 @@ export function subscriptionMatches(subscription,order,checkoutEvidence=null){
  if(!checkoutLinked&&order.subscription_id!==subscription.id)throw Error('Missing checkout link');
  if(subscription.cycle!=='MONTHLY'||cents(subscription.value)!==order.price_cents)throw Error('Unexpected subscription terms');
 }
+export function paymentRevoked(payment){return payment.deleted===true||!['CONFIRMED','RECEIVED'].includes(payment.status)||(payment.refunds||[]).some(r=>r.status==='DONE'&&Number(r.value)>0)||Boolean(payment.chargeback&&payment.chargeback.status!=='DONE');}
+export function recordedSnapshot(payment,order,record){
+ // Only revalidates an existing server-owned payment. It cannot create or extend a paid period.
+ if(!record||record.order_id!==order.id||record.payment_id!==payment.id||!/^pay_[A-Za-z0-9_]+$/.test(payment.id||'')||!order.subscription_id||payment.subscription!==order.subscription_id)throw Error('Unrelated recorded payment');
+ if(payment.checkoutSession&&payment.checkoutSession!==order.checkout_id)throw Error('Unrelated checkout');
+ if(record.amount_cents!==order.price_cents||cents(payment.value)!==record.amount_cents||payment.billingType!=='CREDIT_CARD')throw Error('Unexpected recorded payment terms');
+ return {payment:payment.id,subscription:order.subscription_id,amount:record.amount_cents,status:String(payment.status),revoked:paymentRevoked(payment),start:record.period_start,end:record.period_end};
+}
 export function paymentSnapshot(payment,subscription,order,listedCheckout=null){
  if(!/^pay_[A-Za-z0-9_]+$/.test(payment.id)||!/^sub_[A-Za-z0-9_]+$/.test(subscription.id))throw Error('Invalid resource');
  if(payment.subscription!==subscription.id||typeof payment.customer!=='string'||!payment.customer||payment.customer!==subscription.customer||payment.checkoutSession&&payment.checkoutSession!==order.checkout_id)throw Error('Unrelated payment');
@@ -36,7 +44,7 @@ export function paymentSnapshot(payment,subscription,order,listedCheckout=null){
  const proof=payment.checkoutSession||(listedCheckout?.payment===payment.id?listedCheckout.checkout:null);
  subscriptionMatches(subscription,order,proof);
  if(cents(payment.value)!==order.price_cents||payment.billingType!=='CREDIT_CARD')throw Error('Unexpected payment terms');
- const period=paymentPeriod(payment.dueDate),revoked=payment.deleted===true||!['CONFIRMED','RECEIVED'].includes(payment.status)||(payment.refunds||[]).some(r=>r.status==='DONE'&&Number(r.value)>0)||Boolean(payment.chargeback&&payment.chargeback.status!=='DONE');
+ const period=paymentPeriod(payment.dueDate),revoked=paymentRevoked(payment);
  return {payment:payment.id,subscription:subscription.id,amount:order.price_cents,status:String(payment.status),revoked,start:period.start,end:period.end};
 }
 export async function tokenMatches(actual,expected){

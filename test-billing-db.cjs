@@ -43,17 +43,19 @@ test('a subscription-only checkout link with a lost webhook is recovered through
   const store={
    access:async()=>({admin:true}),
    status:async(id,mode)=>(await db.query('select public.dojo_billing_status($1,$2) as r',[id,mode])).rows[0].r,
+   currentPayments:async(id,mode,at)=>(await db.query("select p.*,to_jsonb(o) as owner from public.dojo_billing_payments p join public.dojo_billing_orders o on o.id=p.order_id where o.user_id=$1 and p.environment=$2 and not p.revoked and p.status in ('CONFIRMED','RECEIVED') and p.period_start<=$3::timestamptz and p.period_end>$3::timestamptz limit 11",[id,mode,at])).rows.map(row=>({record:row,order:row.owner})),
+   paymentRecord:async(o,pid)=>(await db.query('select * from public.dojo_billing_payments where order_id=$1 and environment=$2 and payment_id=$3',[o.id,o.environment,pid])).rows[0],
    ownOrder:async(id,mode,oid)=>(await db.query('select * from public.dojo_billing_orders where user_id=$1 and environment=$2 and id=$3',[id,mode,oid])).rows[0],
    lookup:async(mode,cid,sid)=>(await db.query('select * from public.dojo_billing_orders where environment=$1 and (checkout_id=$2 or subscription_id=$3)',[mode,cid,sid])).rows[0],
    apply:async(o,mode,event,kind,sub,snapshot,observed)=>db.query('select public.dojo_billing_apply($1,$2,$3,$4,$5,$6::jsonb,$7::timestamptz)',[o.id,mode,event,kind,sub,snapshot?JSON.stringify(snapshot):null,observed])
   };
-  let paymentStatus='CONFIRMED';const calls=[];
+  let paymentStatus='CONFIRMED',deletedSubscription=false;const calls=[];
   const provider=async(path,method='GET')=>{
    calls.push({path,method});
    if(path.startsWith('/payments?')){const q=new URL('https://api.test'+path).searchParams;assert.ok(q.get('checkoutSession')===checkout||q.get('subscription')==='sub_recovery');return {data:q.has('subscription')?[{id:'pay_recovery'}]:[],hasMore:false};}
    if(path.startsWith('/subscriptions?'))return {data:[{id:'sub_recovery',checkoutSession:checkout}],hasMore:false};
    if(path==='/payments/pay_recovery')return {id:'pay_recovery',subscription:'sub_recovery',customer:'cus_recovery',billingType:'CREDIT_CARD',value:11.99,status:paymentStatus,dueDate:dateKey()};
-   if(path==='/subscriptions/sub_recovery')return {id:'sub_recovery',customer:'cus_recovery',checkoutSession:checkout,value:11.99,cycle:'MONTHLY'};
+   if(path==='/subscriptions/sub_recovery'){if(deletedSubscription)throw Object.assign(Error('Removed subscription unavailable'),{status:404});return {id:'sub_recovery',customer:'cus_recovery',checkoutSession:checkout,value:11.99,cycle:'MONTHLY'};}
    throw Error('Unexpected provider request');
   };
   const options={store,provider,getUser:async header=>header==='Bearer owner'?{id:user}:header==='Bearer other'?{id:other}:null,mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40)};
@@ -62,12 +64,15 @@ test('a subscription-only checkout link with a lost webhook is recovered through
   assert.equal((await (await h.billing(request('other'))).json()).active,false);assert.equal(calls.length,0,'another signed-in account cannot recover this checkout');
   const first=await (await h.billing(request())).json();assert.equal(first.active,true);assert.equal(first.payments.length,1);assert.equal(first.sync,'recovered');
   const originalEnd=first.periodEnd;
-  await h.billing(request());assert.equal(calls.length,5,'active reads rely on the ledger');
+  await h.billing(request());assert.equal(calls.length,6,'Sandbox rechecks the stored active payment directly');
   // Simulate a lost ledger status update: another server instance rechecks the same payment, with no extra period.
   await db.query("update public.dojo_billing_payments set revoked=true,status='PENDING'");
   const second=await (await createHandlers(options).billing(request())).json();assert.equal(second.active,true);assert.equal(second.periodEnd,originalEnd);assert.equal(second.payments.length,1);
   assert.ok(calls.every(c=>c.method==='GET'),'reconciliation never creates or charges a subscription');
+  await store.apply({id:order},'sandbox','cancel-before-refund','CANCELLED_BY_OWNER','sub_recovery',null,new Date().toISOString());deletedSubscription=true;
+  const stillActive=await (await createHandlers(options).billing(request())).json();assert.equal(stillActive.active,true,'cancellation alone preserves the paid period even if subscription GET returns 404');assert.equal(stillActive.order.renewalCancelled,true);
   paymentStatus='REFUNDED';
+  const refreshed=await (await createHandlers(options).billing(request())).json();assert.equal(refreshed.active,false,'manual refresh recovers a lost refund webhook for an already-active account');assert.equal(refreshed.payments[0].revoked,true);assert.equal(refreshed.payments.length,1);
   const event=await h.webhook(new Request('https://server/webhook',{method:'POST',headers:{'asaas-access-token':'a'.repeat(40)},body:JSON.stringify({id:'refund-recovery',event:'PAYMENT_REFUNDED',payment:{id:'pay_recovery'}})}));assert.equal(event.status,200);
   assert.equal((await store.status(user,'sandbox')).active,false);
   assert.equal((await store.status(user,'production')).active,false);

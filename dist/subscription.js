@@ -10,9 +10,9 @@ const DojoPayments=(()=>{
   if(error||data?.error){let detail=data?.error;try{detail??=(await error?.context?.json())?.error;}catch{}throw Error(detail||'Não foi possível consultar a assinatura. Tente atualizar a situação.');}
   return data;
  }
- async function refresh(){
+ async function refresh(reconcile=false){
   const user=DojoAccounts.user?.id;if(!enabled()||!user){reset();return;}
-  try{const data=await request({action:'status'});if(DojoAccounts.user?.id!==user)return reset();if(data.mode!==expectedMode())throw Error('O ambiente de assinaturas está diferente do esperado. Confira a configuração antes de contratar.');status=data;owner=user;verifiedAt=performance.now();serverAt=Date.parse(data.serverNow);if(!Number.isFinite(serverAt))reset();}
+  try{const data=await request({action:'status',reconcile:reconcile===true});if(DojoAccounts.user?.id!==user)return reset();if(data.mode!==expectedMode())throw Error('O ambiente de assinaturas está diferente do esperado. Confira a configuração antes de contratar.');status=data;owner=user;verifiedAt=performance.now();serverAt=Date.parse(data.serverNow);if(!Number.isFinite(serverAt))reset();}
   catch(error){reset();status.message=error.message;}
   window.dispatchEvent(new Event('dojo-subscription-status'));
  }
@@ -32,7 +32,7 @@ const DojoPayments=(()=>{
  DojoGame.setPremiumProvider(active);
  document.addEventListener('submit',event=>{if(event.target.id==='subscription-start'){event.preventDefault();checkout(event.target);}});
  document.addEventListener('click',async event=>{
-  if(event.target.closest('[data-subscription-refresh]')){message('Consultando…');await refresh();if(currentView==='subscription')render('subscription');}
+  if(event.target.closest('[data-subscription-refresh]')){message('Consultando…');await refresh(true);if(currentView==='subscription')render('subscription');}
   if(event.target.closest('[data-subscription-cancel]')){document.getElementById('subscription-cancel-confirm').innerHTML='<div class="learning-callout"><h3>Cancelar a renovação?</h3><p>As próximas cobranças serão interrompidas. O período pago continua disponível. Cancelar a renovação não solicita reembolso; para isso, fale com André.</p><button class="outline" data-subscription-confirm-cancel>Confirmar cancelamento</button><button class="text-button" data-subscription-back>Voltar</button></div>';}
   if(event.target.closest('[data-subscription-confirm-cancel]'))await cancel();
   if(event.target.closest('[data-subscription-back]'))document.getElementById('subscription-cancel-confirm').replaceChildren();
