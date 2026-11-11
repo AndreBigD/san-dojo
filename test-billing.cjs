@@ -70,3 +70,11 @@ test('sandbox UI makes no requests for students and refuses production entitleme
  await context.P.refresh();assert.equal(calls,0);assert.equal(context.P.active(),false);
  admin=true;await context.P.refresh();assert.ok(calls>0);assert.equal(context.P.active(),false);assert.match(context.P.page(),/ambiente de assinaturas está diferente/);
 });
+test('public health reports only configuration presence, never secrets, accounts or financial data',async()=>{
+ const {createHandlers}=await import('./backend/dojo-billing/handler.mjs');let calls=0;
+ const handlers=createHandlers({store:{},getUser:async()=>{calls++;throw Error('must not authenticate');},provider:async()=>{calls++;throw Error('must not contact Asaas');},mode:' Sandbox ',site:'https://sandojokarate.com.br/',webhookToken:'private-token-'.repeat(4),apiKeyConfigured:true,salesEnabled:false});
+ const response=await handlers.billing(new Request('https://server/functions/v1/dojo-billing/health'));assert.equal(response.status,200);
+ const value=await response.json();assert.equal(value.environment,'disabled');assert.equal(value.modeNeedsFormatting,true);assert.equal(value.apiKeyConfigured,true);assert.equal(value.webhookTokenConfigured,true);
+ assert.equal(calls,0);assert.ok(!JSON.stringify(value).includes('private-token'));assert.deepEqual(Object.keys(value).sort(),['apiKeyConfigured','checkoutEnabled','environment','modeConfigured','modeNeedsFormatting','service','version','webhookTokenConfigured'].sort());
+ assert.equal((await handlers.billing(new Request('https://server/functions/v1/dojo-billing',{headers:{origin:'https://sandojokarate.com.br'}}))).status,405);
+});

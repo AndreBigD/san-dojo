@@ -25,6 +25,6 @@ const store={
  async apply(o:any,environment:string,event:string,kind:string,subscription:string|null,snapshot:any,observed:string){unwrap(await db.rpc('dojo_billing_apply',{p_order:o.id,p_environment:environment,p_event:event,p_kind:kind,p_subscription:subscription,p_snapshot:snapshot,p_observed:observed}));}
 };
 // Provider credentials are read only by this server. No API key or payment data is sent to the browser.
-const provider=mode==='disabled'?async()=>{throw Error('Disabled');}:asaasClient({mode,key:env('ASAAS_API_KEY')});
-export const handlers=createHandlers({store,mode,provider,salesEnabled:env('ASAAS_CHECKOUT_ENABLED')==='true',site:env('SAN_DOJO_SITE_URL')||'https://sandojokarate.com.br/',webhookToken:env('ASAAS_WEBHOOK_TOKEN'),imageBase64:PLAN_IMAGE_BASE64,
+const provider=(...args:Parameters<ReturnType<typeof asaasClient>>)=>asaasClient({mode,key:env('ASAAS_API_KEY')})(...args);
+export const handlers=createHandlers({store,mode:env('ASAAS_MODE'),provider,apiKeyConfigured:Boolean(env('ASAAS_API_KEY').trim()),salesEnabled:env('ASAAS_CHECKOUT_ENABLED')==='true',site:env('SAN_DOJO_SITE_URL')||'https://sandojokarate.com.br/',webhookToken:env('ASAAS_WEBHOOK_TOKEN'),imageBase64:PLAN_IMAGE_BASE64,
  getUser:async(header:string|null)=>{const token=header?.match(/^Bearer (.+)$/i)?.[1];if(!token)return null;const r=await db.auth.getUser(token);return r.error?null:r.data.user;}});

@@ -55,6 +55,10 @@ Para pausar novas vendas, usar `ASAAS_CHECKOUT_ENABLED=false`. Manter as funçõ
 
 ## Verificação e limites
 
+Diagnóstico do ambiente: `GET /functions/v1/dojo-billing/health` retorna versão, ambiente carregado e indicadores de presença das configurações. Não retorna valores de chaves ou tokens, contas, pagamentos ou dados do Asaas. Não exige login porque os dados retornados são apenas de disponibilidade. Os indicadores de presença não comprovam validade da chave nem correspondência do token com o Asaas. O caminho principal e as operações financeiras continuam autenticados.
+
+Se o app informar que o ambiente é diferente do esperado, consultar esse diagnóstico para distinguir `disabled`, `sandbox` e `production`. A versão de diagnóstico `2026-11-11.2` precisa ser publicada na função `dojo-billing`. A atualização reinicializa o código e carrega os Secrets atuais. `modeNeedsFormatting:true` indica que o valor de ambiente tem diferenças de espaços ou maiúsculas em relação a `sandbox`; o valor bruto nunca é exibido.
+
 Os testes locais abrangem regras do provedor, handlers HTTP, consumo de energia, UI e PostgreSQL via PGlite. Executar `npm install` na cópia pública e `npm test`; `@electric-sql/pglite` é dependência apenas de desenvolvimento.
 
 Não há números de cartão, chaves privadas ou dados reais de pagamentos nos arquivos. O registro do webhook guarda identificador/tipo e pedido, sem persistir o payload completo com dados pessoais. Eventos duplicados não duplicam registros; snapshots antigos não sobrescrevem o estado observado mais recentemente.

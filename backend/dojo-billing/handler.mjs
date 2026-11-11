@@ -1,10 +1,12 @@
 import {PLAN,billingMode,eligible,checkoutPayload,checkoutURL,paymentSnapshot,tokenMatches} from './core.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
-export function createHandlers({store,getUser,provider,mode:rawMode,site,webhookToken,imageBase64,salesEnabled=false,now=()=>new Date()}){
+export function createHandlers({store,getUser,provider,mode:rawMode,site,webhookToken,imageBase64,salesEnabled=false,apiKeyConfigured=false,now=()=>new Date()}){
  const mode=billingMode(rawMode),origin=new URL(site).origin;
  const json=(data,status=200,cors=false)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...(cors?{'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS'}:{})}});
  async function body(req){const raw=await req.text();if(raw.length>65536)throw fail(413,'Pedido muito grande.');try{return JSON.parse(raw);}catch{throw fail(400,'Pedido inválido.');}}
  async function billing(req){
+  // Public health reports configuration presence only; never reads users, payments or provider data.
+  if(req.method==='GET'&&new URL(req.url).pathname.endsWith('/health'))return json({service:'san-dojo-billing',version:'2026-11-11.2',environment:mode,modeConfigured:mode!=='disabled',modeNeedsFormatting:mode==='disabled'&&String(rawMode||'').trim().toLowerCase()==='sandbox',checkoutEnabled:salesEnabled,apiKeyConfigured,webhookTokenConfigured:typeof webhookToken==='string'&&webhookToken.length>=32});
   if(req.headers.get('origin')!==origin)return json({error:'Origem não autorizada.'},403);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'}});
   if(req.method!=='POST')return json({error:'Método não permitido.'},405,true);
