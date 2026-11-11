@@ -32,6 +32,14 @@ test('all pronunciation exercises and vocabulary terms have a real included MP3'
  const ctx=vm.createContext({});vm.runInContext(fs.readFileSync('./dist/audio-map.js','utf8')+'\nthis.registry=JAPANESE_AUDIO;',ctx);
  for(const name of [...C.VOCAB.map(w=>w.name),...Object.values(C.QUESTIONS).map(q=>q.audio).filter(Boolean)]){const asset=ctx.registry[name];assert.ok(asset,name);assert.ok(fs.statSync('./dist/'+asset.src).size>500);}
 });
+
+test('nine is consistently taught as Kyu with the Japanese reading kyuu',()=>{
+ const nine=C.VOCAB.find(w=>w.name==='Kyu');assert.ok(nine);assert.ok(!C.VOCAB.some(w=>w.name==='Ku'));
+ assert.deepEqual(C.QUESTIONS.r5.items,['Roku','Shichi','Hachi','Kyu','Ju']);
+ const ctx=vm.createContext({});vm.runInContext(fs.readFileSync('./dist/audio-map.js','utf8')+'\nthis.registry=JAPANESE_AUDIO;',ctx);
+ assert.equal(ctx.registry.Kyu.say,'きゅう');assert.ok(fs.statSync('./dist/'+ctx.registry.Kyu.src).size>500);
+ const guide=fs.readFileSync('./dist/aprender.html','utf8');assert.ok(guide.includes('九</span> · Kyu'));assert.ok(guide.includes('Ouvir Kyu, número 9'));assert.ok(!/\bKu\b/.test(guide));
+});
 test('YouTube input rejects look-alike hosts and executable protocols',()=>{
  const ctx=vm.createContext({URL});vm.runInContext(fs.readFileSync('./dist/media.js','utf8'),ctx);
  const parse=s=>vm.runInContext('parseYouTube('+JSON.stringify(s)+')',ctx);
