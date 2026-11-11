@@ -31,7 +31,7 @@ test('Postgres protects paid periods, rejects client writes, deduplicates renewa
  }finally{await db.close();}
 });
 
-test('a paid checkout with a lost webhook is recovered through authenticated status and saved once in Postgres',async()=>{
+test('a subscription-only checkout link with a lost webhook is recovered through authenticated status and saved once in Postgres',async()=>{
  const {createHandlers}=await import('./backend/dojo-billing/handler.mjs'),{dateKey}=await import('./backend/dojo-billing/core.mjs');
  const db=new PGlite();try{
   await db.exec('create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);create table public.dojo_profiles(id uuid primary key,active boolean);create table public.dojo_admins(user_id uuid primary key);create table public.dojo_guardians(user_id uuid,status text,consent_version text);create table public.dojo_privacy_requests(user_id uuid,status text);');
@@ -50,9 +50,10 @@ test('a paid checkout with a lost webhook is recovered through authenticated sta
   let paymentStatus='CONFIRMED';const calls=[];
   const provider=async(path,method='GET')=>{
    calls.push({path,method});
-   if(path.startsWith('/payments?')){const q=new URL('https://api.test'+path).searchParams;assert.ok(q.get('checkoutSession')===checkout||q.get('subscription')==='sub_recovery');return {data:[{id:'pay_recovery'}],hasMore:false};}
+   if(path.startsWith('/payments?')){const q=new URL('https://api.test'+path).searchParams;assert.ok(q.get('checkoutSession')===checkout||q.get('subscription')==='sub_recovery');return {data:q.has('subscription')?[{id:'pay_recovery'}]:[],hasMore:false};}
+   if(path.startsWith('/subscriptions?'))return {data:[{id:'sub_recovery',checkoutSession:checkout}],hasMore:false};
    if(path==='/payments/pay_recovery')return {id:'pay_recovery',subscription:'sub_recovery',customer:'cus_recovery',billingType:'CREDIT_CARD',value:11.99,status:paymentStatus,dueDate:dateKey()};
-   if(path==='/subscriptions/sub_recovery')return {id:'sub_recovery',customer:'cus_recovery',value:11.99,cycle:'MONTHLY'};
+   if(path==='/subscriptions/sub_recovery')return {id:'sub_recovery',customer:'cus_recovery',checkoutSession:checkout,value:11.99,cycle:'MONTHLY'};
    throw Error('Unexpected provider request');
   };
   const options={store,provider,getUser:async header=>header==='Bearer owner'?{id:user}:header==='Bearer other'?{id:other}:null,mode:'sandbox',site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40)};
@@ -61,7 +62,7 @@ test('a paid checkout with a lost webhook is recovered through authenticated sta
   assert.equal((await (await h.billing(request('other'))).json()).active,false);assert.equal(calls.length,0,'another signed-in account cannot recover this checkout');
   const first=await (await h.billing(request())).json();assert.equal(first.active,true);assert.equal(first.payments.length,1);assert.equal(first.sync,'recovered');
   const originalEnd=first.periodEnd;
-  await h.billing(request());assert.equal(calls.length,3,'active reads rely on the ledger');
+  await h.billing(request());assert.equal(calls.length,5,'active reads rely on the ledger');
   // Simulate a lost ledger status update: another server instance rechecks the same payment, with no extra period.
   await db.query("update public.dojo_billing_payments set revoked=true,status='PENDING'");
   const second=await (await createHandlers(options).billing(request())).json();assert.equal(second.active,true);assert.equal(second.periodEnd,originalEnd);assert.equal(second.payments.length,1);

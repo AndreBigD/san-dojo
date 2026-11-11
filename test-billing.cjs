@@ -94,14 +94,20 @@ test('payment linking accepts a verified payment checkout or previously bound su
  assert.throws(()=>C.paymentSnapshot(bare,s,{checkout_id:null,subscription_id:null,price_cents:1199}));
 });
 
-async function recoveryHarness({mode='sandbox',admin=true,active=false,providerError=null,listOverride=null,paymentPatch={},subscriptionPatch={}}={}){
+async function recoveryHarness({mode='sandbox',admin=true,active=false,providerError=null,listOverride=null,paymentPatch={},subscriptionPatch={},bySubscription=false,subscriptionPages=null}={}){
  const {createHandlers}=await import('./backend/dojo-billing/handler.mjs');
  const order={id,user_id:id,environment:mode,checkout_id:checkout,price_cents:1199,state:'pending',subscription_id:null};
  const subscription={id:'sub_abc',customer:'cus_abc',cycle:'MONTHLY',value:11.99,...subscriptionPatch};
  const payment={id:'pay_abc',customer:'cus_abc',subscription:'sub_abc',billingType:'CREDIT_CARD',value:11.99,status:'CONFIRMED',dueDate:'2026-11-11',...paymentPatch};
  let clock=new Date('2026-11-11T16:00:00Z');const calls=[],applied=[],lookups=[],reports=[];
- const store={access:async()=>({admin}),status:async()=>({active,serverNow:clock.toISOString(),order:{id,state:order.state},payments:applied.map(a=>a[5]).filter(Boolean)}),ownOrder:async(user,env,oid)=>{lookups.push([user,env,oid]);return user===id&&env===mode&&oid===id?order:null;},apply:async(...a)=>{applied.push(a);order.subscription_id=a[4];order.state='active';active=!a[5].revoked;}};
- const provider=async(path,method='GET')=>{calls.push({path,method});if(providerError)throw providerError;if(path.startsWith('/payments?'))return listOverride||{data:[{id:payment.id}],hasMore:false};if(path==='/payments/pay_abc')return payment;if(path==='/subscriptions/sub_abc')return subscription;throw Error('Unexpected provider call');};
+ const store={access:async()=>({admin}),status:async()=>({active,serverNow:clock.toISOString(),order:{id,state:order.state},payments:applied.map(a=>a[5]).filter(Boolean)}),ownOrder:async(user,env,oid)=>{lookups.push([user,env,oid]);return user===id&&env===mode&&oid===id?order:null;},apply:async(...a)=>{applied.push(a);order.subscription_id=a[4];order.state='active';if(a[5])active=!a[5].revoked;}};
+ let subscriptionPage=0;
+ const provider=async(path,method='GET')=>{
+  calls.push({path,method});if(providerError)throw providerError;
+  if(path.startsWith('/payments?')){const q=new URL('https://server'+path).searchParams;if(bySubscription&&!q.has('subscription'))return {data:[],hasMore:false};return listOverride||{data:[{id:payment.id}],hasMore:false};}
+  if(path.startsWith('/subscriptions?'))return subscriptionPages?.[subscriptionPage++]||{data:[],hasMore:false};
+  if(path==='/payments/pay_abc')return payment;if(path==='/subscriptions/sub_abc')return subscription;throw Error('Unexpected provider call');
+ };
  const h=createHandlers({store,getUser:async header=>header==='Bearer signed-in'?{id}:null,provider,mode,site:'https://sandojokarate.com.br/',webhookToken:'a'.repeat(40),now:()=>clock,report:code=>reports.push(code)});
  const request=(input={})=>new Request('https://server/dojo-billing',{method:'POST',headers:{origin:'https://sandojokarate.com.br',authorization:'Bearer signed-in'},body:JSON.stringify({action:'status',...input})});
  return {h,request,calls,applied,lookups,reports,advance:ms=>{clock=new Date(clock.getTime()+ms);}};
@@ -135,7 +141,37 @@ test('recovery is blocked for students in sandbox, gives safe actionable errors 
  let value=await (await denied.h.billing(denied.request())).json();assert.equal(value.active,false);assert.equal(value.sync,'provider_access_denied');assert.match(value.message,/chave e as permissões/);assert.ok(!JSON.stringify(value).includes('sensitive'));
  await denied.h.billing(denied.request());assert.equal(denied.calls.length,1,'backoff avoids repeat calls on double taps');
  denied.advance(60001);await denied.h.billing(denied.request());assert.equal(denied.calls.length,2,'a later refresh can retry');
- const missing=await recoveryHarness({listOverride:{data:[],hasMore:false}});value=await (await missing.h.billing(missing.request())).json();assert.equal(value.sync,'waiting');assert.equal(missing.applied.length,0);
+ const missing=await recoveryHarness({listOverride:{data:[],hasMore:false}});value=await (await missing.h.billing(missing.request())).json();assert.equal(value.sync,'subscription_not_linked');assert.equal(missing.applied.length,0);
+});
+
+test('recovery locates the exact subscription when the payment checkout query returns no charges',async()=>{
+ const T=await recoveryHarness({bySubscription:true,subscriptionPatch:{checkoutSession:checkout},subscriptionPages:[{data:[{id:'sub_other',checkoutSession:'not-this-checkout',customer:'private-other-payer'}],hasMore:true},{data:[{id:'sub_abc',checkoutSession:checkout}],hasMore:false}]});
+ const response=await T.h.billing(T.request({subscriptionId:'sub_other'})),value=await response.json();
+ assert.equal(value.active,true);assert.equal(value.sync,'recovered');assert.equal(T.applied.length,1);assert.equal(T.applied[0][4],'sub_abc');assert.equal(T.calls.length,6);
+ const queries=T.calls.filter(c=>c.path.startsWith('/payments?')).map(c=>new URL('https://server'+c.path).searchParams);
+ assert.equal(queries[0].get('checkoutSession'),checkout);assert.equal(queries[1].get('subscription'),'sub_abc');assert.equal(queries[1].has('checkoutSession'),false);
+ assert.equal(new URL('https://server'+T.calls[2].path).searchParams.get('offset'),'1');
+ assert.ok(T.calls.every(c=>c.method==='GET'));assert.ok(!JSON.stringify(value).includes('private-other-payer'));
+});
+
+test('subscription fallback refuses ambiguous or unproven links, changed terms and truncated scans',async()=>{
+ const exact={id:'sub_abc',checkoutSession:checkout};
+ const cases=[
+  {subscriptionPages:[{data:[exact,{id:'sub_other',checkoutSession:checkout}],hasMore:false}]},
+  {subscriptionPatch:{checkoutSession:'changed'},subscriptionPages:[{data:[exact],hasMore:false}]},
+  {subscriptionPatch:{checkoutSession:checkout,value:1},subscriptionPages:[{data:[exact],hasMore:false}]},
+  {subscriptionPatch:{checkoutSession:checkout},paymentPatch:{subscription:'sub_other'},subscriptionPages:[{data:[exact],hasMore:false}]},
+  {subscriptionPatch:{checkoutSession:checkout},subscriptionPages:[{data:[exact],hasMore:true},{data:[{id:'sub_x'}],hasMore:true},{data:[{id:'sub_y'}],hasMore:true}]}
+ ];
+ for(const options of cases){const T=await recoveryHarness({bySubscription:true,...options}),value=await (await T.h.billing(T.request())).json();assert.equal(value.active,false);assert.equal(T.applied.length,0);assert.ok(['payment_verification_failed','subscription_lookup_limit'].includes(value.sync));}
+ const unrelated=await recoveryHarness({bySubscription:true,subscriptionPages:[{data:[{id:'sub_other',customer:'ALUNO TESTE',value:11.99}],hasMore:false}]});
+ const value=await (await unrelated.h.billing(unrelated.request())).json();assert.equal(value.sync,'subscription_not_linked');assert.equal(unrelated.applied.length,0,'matching name and price are not ownership proof');
+});
+
+test('a verified subscription with no current charges is bound without granting energy',async()=>{
+ const T=await recoveryHarness({bySubscription:true,listOverride:{data:[],hasMore:false},subscriptionPatch:{checkoutSession:checkout},subscriptionPages:[{data:[{id:'sub_abc',checkoutSession:checkout}],hasMore:false}]});
+ const value=await (await T.h.billing(T.request())).json();assert.equal(value.active,false);assert.equal(value.sync,'subscription_payment_waiting');assert.equal(T.applied.length,1);assert.equal(T.applied[0][5],null);assert.equal(T.applied[0][4],'sub_abc');
+ T.advance(60001);await T.h.billing(T.request());assert.equal(T.calls.filter(c=>c.path.startsWith('/subscriptions?')).length,1,'subsequent refreshes use the bound subscription');
 });
 
 test('payment webhook can bind its first payment when checkoutSession is only on the payment',async()=>{

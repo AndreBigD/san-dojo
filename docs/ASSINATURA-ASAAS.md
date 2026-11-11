@@ -46,7 +46,7 @@ O RPC de reserva impede duas contratações abertas da mesma conta. Se a criaç�
 
 ## Critérios antes de cobrar de verdade
 
-Além dos testes locais, conferir no Sandbox real: formato da cobrança, vínculo da assinatura, entrega dos webhooks, cancelamento no Asaas, valores e tarifas da conta. Em 11/11, André concluiu um Checkout Sandbox e apresentou a tela de pagamento confirmado no Asaas. Ao voltar, o San Dojo permaneceu pendente, sem cobrança no histórico. A recuperação da versão `2026-11-11.3` foi testada localmente e ainda precisa ser publicada e validada nessa contratação. Esse teste parcial não conclui a homologação nem libera cobranças reais.
+Além dos testes locais, conferir no Sandbox real: formato da cobrança, vínculo da assinatura, entrega dos webhooks, cancelamento no Asaas, valores e tarifas da conta. Em 11/11, André concluiu um Checkout Sandbox e apresentou a tela de pagamento confirmado no Asaas. Ao voltar, o San Dojo permaneceu pendente, sem cobrança no histórico. A versão `2026-11-11.3` foi publicada, mas a consulta direta de cobranças retornou vazia. O painel mostrou uma assinatura mensal de teste e uma linha com vencimento em 11/11; isso ainda não confirma o estado da cobrança na API. A versão `2026-11-11.4` acrescenta busca da assinatura por vínculo exato com o checkout e aguarda publicação e validação. Esse teste parcial não conclui a homologação nem libera cobranças reais.
 
 Revisar os termos preparados, o atendimento de reembolsos, os dados comerciais exigidos pelo Asaas e o processo de retenção/exclusão dos registros financeiros. A migração impede apagar diretamente uma conta que ainda tenha pedidos financeiros: cancelar a recorrência e avaliar anonimização/retenção antes da exclusão. Isso não deve deixar uma cobrança ativa após pedido de encerramento.
 
@@ -58,11 +58,13 @@ Para pausar novas vendas, usar `ASAAS_CHECKOUT_ENABLED=false`. Manter as funçõ
 
 Diagnóstico do ambiente: `GET /functions/v1/dojo-billing/health` retorna versão, ambiente carregado e indicadores de presença das configurações. Não retorna valores de chaves ou tokens, contas, pagamentos ou dados do Asaas. Não exige login porque os dados retornados são apenas de disponibilidade. Os indicadores de presença não comprovam validade da chave nem correspondência do token com o Asaas. O caminho principal e as operações financeiras continuam autenticados.
 
-Se o app informar que o ambiente é diferente do esperado, consultar esse diagnóstico para distinguir `disabled`, `sandbox` e `production`. A versão atual é `2026-11-11.3`; o ambiente Sandbox foi confirmado online na versão anterior, `2026-11-11.2`. A atualização reinicializa o código e carrega os Secrets atuais. `modeNeedsFormatting:true` indica que o valor de ambiente tem diferenças de espaços ou maiúsculas em relação a `sandbox`; o valor bruto nunca é exibido.
+Se o app informar que o ambiente é diferente do esperado, consultar esse diagnóstico para distinguir `disabled`, `sandbox` e `production`. A versão preparada atual é `2026-11-11.4`; a versão `2026-11-11.3` foi confirmada online em Sandbox. A atualização reinicializa o código e carrega os Secrets atuais. `modeNeedsFormatting:true` indica que o valor de ambiente tem diferenças de espaços ou maiúsculas em relação a `sandbox`; o valor bruto nunca é exibido.
 
 Na versão `2026-11-11.3`, `action:status` recupera uma confirmação ausente somente quando não existe direito ativo. O pedido é escolhido no banco e relido com os filtros da conta autenticada e do ambiente; identificadores, valores e flags enviados pelo navegador não definem esse vínculo. O servidor faz apenas GETs: lista `/payments` com filtro `checkoutSession` ou assinatura já vinculada e vencimentos entre 32 dias atrás e hoje, depois busca os recursos completos de pagamento e assinatura. A lista filtrada pelo checkout também comprova o vínculo quando os recursos individuais omitem esse campo. Campos de checkout conflitantes, assinatura diferente, cliente diferente, preço, ciclo ou meio de pagamento incorretos impedem a gravação.
 
 A recuperação exige uma lista completa com até dez cobranças nessa janela; não processa um resultado truncado. Ela reutiliza a rotina transacional existente: reconsultar não cria outro pagamento nem estende o período. Um cache de promessas por instância limita novas tentativas por pedido a uma por minuto; não é um limite global persistente. Contas com direito ativo consultam o registro local; o webhook continua responsável por renovações, cancelamentos e estornos. O navegador recebe apenas estado e mensagens seguras. Falhas geram nos logs uma categoria fixa, sem resposta bruta, chave ou dados do pagador.
+
+Desde `2026-11-11.4`, uma consulta vazia de cobranças por checkout, em pedido ainda sem assinatura vinculada, tenta localizar a assinatura na API. A busca percorre até três páginas de cem assinaturas, incluindo removidas, e exige que a listagem esteja completa e tenha um único ID com `checkoutSession` idêntico ao pedido. Depois busca o recurso completo, reconfirma vínculo, ciclo e preço e só então consulta cobranças pelo ID da assinatura. Nome do pagador e valor isolados nunca servem como vínculo. Nenhum dado de outros pagadores é retornado ou persistido. Resultado ambíguo, truncado ou sem vínculo não libera energia. Uma assinatura verificada sem cobrança do período pode ser vinculada para permitir consulta e cancelamento, mas não concede benefício.
 
 Os testes locais abrangem regras do provedor, handlers HTTP, consumo de energia, UI e PostgreSQL via PGlite. Executar `npm install` na cópia pública e `npm test`; `@electric-sql/pglite` é dependência apenas de desenvolvimento.
 
@@ -80,6 +82,7 @@ Monitorar os logs e as filas do Asaas: notificações externas podem atrasar ou 
 - <https://docs.asaas.com/docs/about-webhooks>
 - <https://docs.asaas.com/reference/recuperar-uma-unica-cobranca>
 - <https://docs.asaas.com/reference/listar-cobrancas>
+- <https://docs.asaas.com/reference/listar-assinaturas>
 - <https://docs.asaas.com/reference/recuperar-uma-unica-assinatura>
 - <https://docs.asaas.com/reference/remover-assinatura>
 - <https://docs.asaas.com/docs/sandbox>
