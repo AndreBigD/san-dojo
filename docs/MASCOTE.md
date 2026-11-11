@@ -31,3 +31,5 @@ Essa conferência usa o navegador do computador com larguras de celular. O usuá
 ## Ajuste de 11 de novembro de 2026
 
 A pose dos 14 dias foi substituída pela versão musculosa `radiante-v2.webp`, mantendo o rosto, o kimono e um único risco dourado. O cálculo dos dias permanece igual. Os cinco testes do mascote passaram novamente. Essa revisão está preparada no código e no pacote; seu envio ao Netlify está pendente porque o controle do navegador não estava disponível na sessão.
+
+A comemoração “Mais forte” também usa o mesmo modelo musculoso em oito poses, nos arquivos `forte-v2.mp4` e `forte-v2.webp`. O clipe mantém 2,5 segundos, reprodução inline, pular/repetir e movimentos reduzidos. Nove testes de mascote e conclusão passaram. O novo vídeo está no pacote atualizado, aguardando publicação pelo Netlify.

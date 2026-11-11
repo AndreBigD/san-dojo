@@ -26,8 +26,8 @@ test('clips have iPhone inline/muted playback, explicit replay/skip, reduced mot
  const crypto=require('node:crypto'),hashes=[];
  for(const c of M.clips){const html=M.videoMarkup(c,{reduce:false});assert.match(html,/autoplay/);assert.match(html,/muted playsinline/);assert.match(html,/data-celebration-skip/);assert.match(html,/data-celebration-replay/);
   const reduced=M.videoMarkup(c,{reduce:true});assert.doesNotMatch(reduced,/autoplay/);assert.match(reduced,/preload="none"/);assert.match(reduced,/<video hidden data-src=/);
-  for(const ext of ['mp4','webp'])assert.ok(fs.statSync('./dist/assets/celebrations/'+c.id+'-v1.'+ext).size>1000);
-  const bytes=fs.readFileSync('./dist/assets/celebrations/'+c.id+'-v1.mp4');assert.match(bytes.subarray(0,40).toString('ascii'),/ftyp/);hashes.push(crypto.createHash('sha256').update(bytes).digest('hex'));
+  for(const ext of ['mp4','webp'])assert.ok(fs.statSync('./dist/assets/celebrations/'+c.id+'-v'+(c.version||1)+'.'+ext).size>1000);
+  const bytes=fs.readFileSync('./dist/assets/celebrations/'+c.id+'-v'+(c.version||1)+'.mp4');assert.match(bytes.subarray(0,40).toString('ascii'),/ftyp/);hashes.push(crypto.createHash('sha256').update(bytes).digest('hex'));
  }
  assert.equal(new Set(hashes).size,5);for(const mood of Object.values(M.states))assert.ok(fs.existsSync('./dist/'+mood.image));
  assert.doesNotMatch(M.portrait([S.shift(today,-20)],today),/descansando-v1/);assert.match(M.portrait([S.shift(today,-20)],today),/sensei-star-orbit/);

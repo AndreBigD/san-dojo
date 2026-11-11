@@ -6,7 +6,7 @@ Aplicativo web de aprendizagem de **karatê Shinkyokushin**, criado para o San D
 
 **Atualização publicada:** atividades de associação, desafios em cartões e cinco comemorações animadas do mascote. O sensei também muda de expressão conforme os dias de prática. [Demonstração](https://sandojokarate.com.br/mascot-preview.html) · [Regras e validação](docs/MASCOTE.md).
 
-**Ajuste preparado em 11/11:** versão bem musculosa do sensei ao alcançar 14 dias seguidos, aguardando envio do pacote ao Netlify.
+**Ajuste preparado em 11/11:** versão bem musculosa do sensei ao alcançar 14 dias seguidos e na comemoração “Mais forte”, aguardando envio do pacote ao Netlify.
 
 ![Apresentação do San Dojo](docs/san-dojo.png)
 
